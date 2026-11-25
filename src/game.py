@@ -149,8 +149,7 @@ class MurderMysteryGame:
                 {},  # Will be populated with agents dict
                 self.master.relationships,
                 self.master.case_state,
-                self.visualizer if self.visualize_mode else None,  # Pass visualizer for arrows
-                self.orchestrator  # Pass orchestrator to receive gossip summaries
+                self.visualizer if self.visualize_mode else None,
             )
 
         # Create menu buttons (left side)

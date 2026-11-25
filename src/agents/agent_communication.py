@@ -20,21 +20,19 @@ class AgentCommunicationManager:
     Agents share information based on their relationships and personalities.
     """
 
-    def __init__(self, agents_dict, relationships, case_state, visualizer=None, orchestrator=None):
+    def __init__(self, agents_dict, relationships, case_state, visualizer=None):
         """
         Args:
             agents_dict: Dict of agent_name -> SuspectAgent
             relationships: Dict of relationship_pair -> relationship_type
             case_state: The case state dict
-            visualizer: Optional visualization manager to show communication arrows
-            orchestrator: Optional orchestrator agent to receive gossip summaries
+            visualizer: Optional rumor board to show gossip travelling
         """
         self.agents = agents_dict
         self.relationships = relationships
         self.case_state = case_state
         self.visualizer = visualizer
-        self.orchestrator = orchestrator
-        self.communication_log = []
+
 
     def _get_relationship_type(self, agent1_name, agent2_name):
         """Get the relationship type between two agents"""
@@ -147,14 +145,6 @@ React to what they said naturally (1-2 sentences)."""
 
             agent2_response = response.choices[0].message.content
 
-            comm_record = {
-                "from": agent1_name,
-                "to": agent2_name,
-                "relationship": rel_type,
-                "agent1_share": agent1_share,
-                "agent2_reaction": agent2_response
-            }
-            self.communication_log.append(comm_record)
 
             print(f"💬 {agent1_name} → {agent2_name}:")
             print(f"   \"{agent1_share}\"")
@@ -206,16 +196,7 @@ React to what they said naturally (1-2 sentences)."""
             agent.personality_levels['Moody'] = min(5, agent.personality_levels['Moody'] + 0.3)
             agent.personality_levels['Trust'] = max(0, agent.personality_levels['Trust'] - 0.3)
 
-        # Send the latest gossip to the orchestrator for narrative tracking
-        if agent.gossip_heard and self.orchestrator:
-            latest = agent.gossip_heard[-1]
-            summary = f"{latest.get('from', 'Unknown')} told {agent_name}: {latest.get('info', '')}"
-            self.orchestrator.record_agent_gossip(agent_name, summary)
 
         # Visualize the personality update
         if self.visualizer:
             self.visualizer.send_personality_update(agent_name, agent.personality_levels)
-
-    def get_communication_log(self):
-        """Get the full log of inter-agent communications"""
-        return self.communication_log

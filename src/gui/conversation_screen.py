@@ -112,9 +112,6 @@ class ConversationScreen:
                 self.response_cache[self.loading_message] = response
                 if self.visualizer:
                     self.visualizer.send_interaction(self.name, duration=180)
-                if self.agent.orchestrator:
-                    self.agent.orchestrator.record_suspect_response(
-                        self.name, self.loading_message, response, self.agent.get_personality_state())
         except Exception as e:
             self.pending_response = f"...I don't want to talk right now. ({e.__class__.__name__})"
         finally:
