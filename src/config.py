@@ -6,14 +6,6 @@ Game configuration and constants
 SCREEN_WIDTH = 1400
 SCREEN_HEIGHT = 900
 
-# Colors
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-DARK_GRAY = (30, 30, 30)
-LIGHT_GRAY = (200, 200, 200)
-ACCENT_COLOR = (200, 50, 50)
-
-# Card dimensions
 # Board layout (8px grid). Menu column on the left margin, 3x2 card grid beside it.
 MARGIN = 48
 GRID_TOP = 144

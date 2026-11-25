@@ -2,7 +2,6 @@
 Case-file menu button built from the Dragon Regalia button sheet.
 """
 import pygame
-from src.config import *
 from src.ui import style, sound
 
 SHEET = "assets/dialogue_box/20240709dragonButtonA-Sheet.png"

@@ -115,19 +115,9 @@ class AgentBehaviorVisualizer:
     def send_orchestrator_briefing(self, suspect_name, duration=180):
         self._q.put(("drop", suspect_name, None))
 
-    def send_feedback_to_orchestrator(self, suspect_name, duration=180):
-        pass  # internal bookkeeping; nothing for the player to see
-
     def send_agent_communication(self, from_suspect, to_suspect, duration=120, text=""):
         self._q.put(("gossip", (from_suspect, to_suspect), text))
 
-    def send_relationship_interaction(self, suspect1, suspect2, duration=60):
-        self._q.put(("gossip", (suspect1, suspect2), ""))
-
-    def send_info_flow(self, suspect1, suspect2, duration=60):
-        self._q.put(("gossip", (suspect1, suspect2), ""))
-
-    # ------------------------------------------------------------ update
     def update(self):
         self.frame += 1
         while not self._q.empty():

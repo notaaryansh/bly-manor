@@ -6,7 +6,6 @@ chunky pixel grid as the sprites. Candles, fire and rain animate on top.
 import math
 import random
 import pygame
-from src.ui import style
 
 LOW_W, LOW_H, K = 350, 225, 4
 

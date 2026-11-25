@@ -410,10 +410,6 @@ Return ONLY the JSON object."""
             # If analysis fails, return empty changes
             return {}
 
-    def reset_conversation(self):
-        """Reset the conversation history"""
-        self.conversation_history = []
-
     def get_personality_state(self):
         """Get the current personality state"""
         return self.personality_levels.copy()
