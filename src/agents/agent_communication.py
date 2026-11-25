@@ -64,7 +64,6 @@ class AgentCommunicationManager:
         Trigger communications between agents after a detective interrogation.
         Runs in background thread to prevent UI freeze.
         """
-        print(f"\n🔄 CHAOS MODE: Agents are gossiping about {last_interrogated_suspect}...\n")
 
         interrogated_agent = self.agents.get(last_interrogated_suspect)
         if not interrogated_agent:
@@ -104,7 +103,6 @@ class AgentCommunicationManager:
         Conduct a conversation between two agents where one shares interrogation details.
         """
         agent1 = self.agents[agent1_name]
-        agent2 = self.agents[agent2_name]
 
         share_prompt = f"""You are {agent1_name}. You were just interrogated by a detective.
 
@@ -127,28 +125,6 @@ Tell them about the interrogation naturally (1-2 sentences). Adjust honesty to m
             )
 
             agent1_share = response.choices[0].message.content
-
-            react_prompt = f"""You are {agent2_name}.
-
-{agent1_name} ({rel_type}) just told you: "{agent1_share}"
-
-Your personality: Trust {agent2.personality_levels.get('Trust', 3)}/5, Anxious {agent2.personality_levels.get('Anxious', 3)}/5, Moody {agent2.personality_levels.get('Moody', 3)}/5
-
-React to what they said naturally (1-2 sentences)."""
-
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": react_prompt}],
-                temperature=0.8,
-                max_tokens=150
-            )
-
-            agent2_response = response.choices[0].message.content
-
-
-            print(f"💬 {agent1_name} → {agent2_name}:")
-            print(f"   \"{agent1_share}\"")
-            print(f"   {agent2_name}: \"{agent2_response}\"\n")
 
             # Let the player know the rumor mill is turning
             fx.post(fx.toast, f"{agent2_name} heard something from {agent1_name}...", style.ROSE)
@@ -179,8 +155,6 @@ React to what they said naturally (1-2 sentences)."""
             "info": shared_info,
             "relationship": rel_type
         })
-
-        print(f"📝 [DEBUG] {agent_name} now knows gossip from {from_agent}: \"{shared_info}\"")
 
         if rel_type == "Close Friend":
             agent.personality_levels['Trust'] = min(5, agent.personality_levels['Trust'] + 0.5)
