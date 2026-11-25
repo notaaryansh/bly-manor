@@ -65,8 +65,10 @@ class Room:
         pygame.draw.ellipse(s, (120, 40, 50), (90, floor_y + 25, 170, 26), 1)
 
         getattr(self, "_feature_" + self.kind)(s, floor_y)
-        if self.kind in ("window", "fireplace", "piano"):
-            self._painting(s, 278, 26)
+        # paintings hang where the UI never covers them (the right wall is under the demeanor panel)
+        spot = {"window": (40, 26), "piano": (70, 26)}.get(self.kind)
+        if spot:
+            self._painting(s, *spot)
         self._candle_base(s, 40, wy - 2)
         self._candle_base(s, 312, wy - 2)
         return pygame.transform.scale(s, (LOW_W * K, LOW_H * K))
@@ -178,12 +180,18 @@ class Room:
 
     def _flames(self, surface, rect, frame, power):
         r = pygame.Rect(rect.x * K, rect.y * K, rect.w * K, rect.h * K)
-        glow = pygame.Surface((r.w * 3, r.h * 3))
         flick = 0.85 + 0.15 * math.sin(frame * 0.3) * math.sin(frame * 0.13)
         g = flick * power
-        pygame.draw.ellipse(glow, (int(34 * g), int(18 * g), int(4 * g)), glow.get_rect())
-        pygame.draw.ellipse(glow, (int(60 * g), int(32 * g), int(8 * g)), glow.get_rect().inflate(-r.w * 1.4, -r.h * 1.4))
-        surface.blit(glow, glow.get_rect(center=r.center), special_flags=pygame.BLEND_RGB_ADD)
+        size = (int(r.w * 2.4), int(r.h * 2.4))
+        steps = 5
+        acc = pygame.Surface(size)
+        for i in range(steps):  # stepped falloff reads as pixel light, without one hard ring
+            k = 1 - i / steps
+            rect = acc.get_rect().inflate(-size[0] * (1 - k), -size[1] * (1 - k))
+            layer = pygame.Surface(size)
+            pygame.draw.ellipse(layer, (int(11 * g), int(6 * g), int(1.5 * g)), rect)
+            acc.blit(layer, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
+        surface.blit(acc, acc.get_rect(center=r.center), special_flags=pygame.BLEND_RGB_ADD)
         for i in range(int(14 * power)):
             fx = r.x + 8 + (i * 37 + frame * 3) % (r.w - 16)
             h = int((20 + 30 * abs(math.sin(frame * 0.2 + i))) * power)
@@ -194,8 +202,10 @@ class Room:
         flick = math.sin(frame * 0.4) * math.sin(frame * 0.17)
         glow = pygame.Surface((200, 200))
         g = 1 + 0.2 * flick
-        pygame.draw.circle(glow, (int(22 * g), int(14 * g), int(4 * g)), (100, 100), 100)
-        pygame.draw.circle(glow, (int(46 * g), int(30 * g), int(8 * g)), (100, 100), 46)
+        for rad in (100, 76, 54, 34):  # stepped falloff
+            layer = pygame.Surface((200, 200))
+            pygame.draw.circle(layer, (int(11 * g), int(7 * g), int(2 * g)), (100, 100), rad)
+            glow.blit(layer, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
         surface.blit(glow, (x - 100, y - 90), special_flags=pygame.BLEND_RGB_ADD)
         h = 16 + int(4 * flick)
         pygame.draw.rect(surface, (255, 200, 90), (x - 4, y - h + 16, 8, h))
