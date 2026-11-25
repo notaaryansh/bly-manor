@@ -125,6 +125,8 @@ class FX:
             surface.blit(veil, (0, 0))
         for f in self.floaters:
             f.draw(surface)
+        prev_clip = surface.get_clip()
+        surface.set_clip(pygame.Rect(0, 0, area_width, surface.get_height()))
         y = 18
         for t in self.toasts:
             slide = ease_out_back(min(1, t.age / 18))
@@ -138,6 +140,7 @@ class FX:
                 pygame.draw.circle(surface, style.PARCHMENT, (rect.x + 26, rect.centery), 7, 2)
             style.text(surface, t.msg, (rect.x + 44, rect.y + 13), 18, style.PARCHMENT)
             y += 56
+        surface.set_clip(prev_clip)
 
 
 fx = FX()
