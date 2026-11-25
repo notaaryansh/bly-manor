@@ -208,8 +208,9 @@ class ConversationScreen:
             if d:
                 good = (d > 0) == (trait == "Trust")
                 self.row_flash[trait] = 50
-                fx.float_text(f"{d:+.0f} {label}", (PANEL.right - PAD - 86, self._row_cy(i) - 4),
-                              style.MOSS if good else style.EMBER, 22)
+                # small delta that rises out of the row's label, never over the pips
+                fx.float_text(f"{d:+.0f}", (PANEL.x + PAD + 96, self._row_cy(i) - 10),
+                              style.MOSS if good else style.EMBER, 18)
 
         if deltas and self.visualizer:
             self.visualizer.send_personality_update(self.name, current)
@@ -359,7 +360,7 @@ class ConversationScreen:
             style.text_mid(surface, self.user_input, input_x, row_cy, 22, style.PARCHMENT)
         else:
             ph = f"{self.name} is thinking..." if waiting else f"Ask {self.name} anything..."
-            style.text_mid(surface, ph, input_x, row_cy, 22, style.DUSK, shadow=False)
+            style.text_mid(surface, ph, input_x + 18, row_cy, 22, style.DUSK, shadow=False)  # clear of the cursor
         if not waiting and (self.frame // 20) % 2 == 0:
             cw = style.font(22).size(self.user_input)[0] if self.user_input else 0
             pygame.draw.rect(surface, style.AMBER, (input_x + cw + 2, row_cy - 11, 10, 22))
