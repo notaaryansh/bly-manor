@@ -332,11 +332,11 @@ class AgentBehaviorVisualizer:
     def _legend(self, surface):
         r = self.rect
         y0 = r.y + 650
-        style.text(surface, "STRING", (r.x + 30, y0), 14, style.PARCHMENT)
+        style.text(surface, "STRING", (r.x + 36, y0), 14, style.PARCHMENT)
         items = [("Friend", style.MOSS), ("Lovers", style.ROSE), ("Business", style.FROST),
                  ("Rival", style.RELATIONSHIP_COLORS["Rival"]), ("Enemy", style.EMBER), ("Family", style.AMBER)]
         for i, (lab, col) in enumerate(items):
-            x = r.x + 30 + (i % 3) * 118
+            x = r.x + 36 + (i % 3) * 116
             y = y0 + 24 + (i // 3) * 22
             pygame.draw.line(surface, col, (x, y + 7), (x + 22, y + 7), 4)
             style.text(surface, lab, (x + 30, y), 14, style.PARCHMENT)
@@ -357,7 +357,7 @@ class AgentBehaviorVisualizer:
         y = panel.y + 36
         for src, dst, snippet, at in self.feed:
             fresh = self.frame - at < 40 and (self.frame // 5) % 2
-            style.text(surface, f"{src} > {dst}", (panel.x + 12, y), 14, style.EMBER if fresh else style.INK, shadow=False)
+            style.text(surface, f"{src} → {dst}", (panel.x + 12, y), 14, style.EMBER if fresh else style.INK, shadow=False)
             if snippet:
                 short = snippet if len(snippet) <= 40 else snippet[:38] + "..."
                 style.text(surface, f'"{short}"', (panel.x + 12, y + 17), 12, (70, 60, 80), shadow=False)
