@@ -103,8 +103,6 @@ class SuspectAgent:
 
         gossip_context += "Remember: This accumulated gossip might be incomplete or distorted, but it's what you've learned from your network.\n"
 
-        print(f"🔍 [DEBUG] {self.name} including local gossip context in prompt: {len(self.gossip_heard)} total pieces of gossip")
-
         return gossip_context
 
     def _build_system_prompt(self, conversation_history=None):
