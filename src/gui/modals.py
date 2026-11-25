@@ -7,6 +7,30 @@ import threading
 from openai import OpenAI
 import os
 from src.config import *
+from src.ui import style
+
+
+
+def _panel(surface, modal):
+    style.nine_slice(surface, (modal.x, modal.y, modal.width, modal.height),
+                     "assets/dialogue_box/20240707dragon9SlicesA.png", 40, 1, fill=style.NIGHT)
+
+
+def _close_button(surface, rect):
+    pygame.draw.rect(surface, style.PLUM, rect, border_radius=4)
+    pygame.draw.rect(surface, style.EMBER, rect, 2, border_radius=4)
+    c = rect.center
+    for d in (-1, 1):
+        pygame.draw.line(surface, style.PARCHMENT, (c[0] - 7, c[1] - 7 * d), (c[0] + 7, c[1] + 7 * d), 3)
+
+
+def _line_color(line):
+    t = line.strip()
+    if t.isupper() or (t.endswith(":") and t[:-1].isupper()):
+        return style.AMBER
+    if t.startswith(("•", "-", "*")):
+        return style.PARCHMENT
+    return style.MIST
 
 
 class InfoModal:
@@ -33,8 +57,8 @@ class InfoModal:
         self.modal_bg = pygame.transform.scale(modal_bg, (self.width, 900))  # Default height
 
         # Create font
-        self.title_font = pygame.font.Font(None, 32)
-        self.text_font = pygame.font.Font(None, 18)
+        self.title_font = style.font(23, title=True)
+        self.text_font = style.font(17)
 
     def generate_facts_content(self):
         """Generate facts content from game state"""
@@ -134,7 +158,7 @@ Observation:"""
         # Semi-transparent overlay
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         overlay.set_alpha(200)
-        overlay.fill((0, 0, 0))
+        overlay.fill(style.INK)
         surface.blit(overlay, (0, 0))
 
         # Generate content based on title
@@ -151,17 +175,11 @@ Observation:"""
         max_height = int(SCREEN_HEIGHT * 0.75)  # Max 75% of window height
         self.height = min(content_height, max_height)
 
-        # Resize modal background
-        self.modal_bg = pygame.transform.scale(
-            pygame.image.load("assets/dialogue_box/20240707dragon9SlicesA.png"),
-            (self.width, self.height),
-        )
-
         # Draw modal background
-        surface.blit(self.modal_bg, (self.x, self.y))
+        _panel(surface, self)
 
         # Draw title
-        title_surface = self.title_font.render(self.title, True, WHITE)
+        title_surface = self.title_font.render(self.title, False, style.AMBER)
         title_x = self.x + 80
         title_y = self.y + 50
         surface.blit(title_surface, (title_x, title_y))
@@ -175,26 +193,19 @@ Observation:"""
         start_line = min(self.scroll_offset, max(0, len(lines) - max_visible_lines))
         for i, line in enumerate(lines[start_line : start_line + max_visible_lines]):
             if line.strip():
-                line_surface = self.text_font.render(line, True, LIGHT_GRAY)
+                line_surface = self.text_font.render(line, False, _line_color(line))
                 surface.blit(line_surface, (content_x, content_y))
             content_y += line_height
 
         # Draw close button (X in top right)
         close_button_rect = self.get_close_button_rect()
-        pygame.draw.rect(surface, (100, 50, 50), close_button_rect, 2)  # Red border
-
-        # Draw X
-        x_font = pygame.font.Font(None, 28)
-        x_text = x_font.render("X", True, WHITE)
-        x_x = close_button_rect.centerx - x_text.get_width() // 2
-        x_y = close_button_rect.centery - x_text.get_height() // 2
-        surface.blit(x_text, (x_x, x_y))
+        _close_button(surface, close_button_rect)
 
         # Draw close instruction
-        close_font = pygame.font.Font(None, 16)
-        close_text = close_font.render("Press ESC or click to close", True, LIGHT_GRAY)
+        close_font = style.font(13)
+        close_text = close_font.render("ESC or click to close", False, style.DUSK)
         close_x = self.x + (self.width - close_text.get_width()) // 2
-        close_y = self.y + self.height - 25
+        close_y = self.y + self.height - 52
         surface.blit(close_text, (close_x, close_y))
 
     def toggle(self):
@@ -242,9 +253,9 @@ class AccusationResultsModal:
         self.result_image = pygame.transform.scale(self.result_image, (200, 200))
 
         # Create fonts
-        self.title_font = pygame.font.Font(None, 36)
-        self.subtitle_font = pygame.font.Font(None, 24)
-        self.text_font = pygame.font.Font(None, 18)
+        self.title_font = style.font(26, title=True)
+        self.subtitle_font = style.font(17)
+        self.text_font = style.font(17)
 
         # Cache for generated content (to avoid recalculating every frame)
         self.cached_content = None
@@ -260,9 +271,9 @@ class AccusationResultsModal:
             murderer = self.master_data.suspects[self.accused_name]
             murderer_briefing = self.orchestrator.get_suspect_briefing(self.accused_name)
 
-            lines.append("═" * 70)
+            lines.append("")
             lines.append(f"✓ CORRECT - {self.accused_name.upper()} IS THE MURDERER")
-            lines.append("═" * 70)
+            lines.append("")
             lines.append("")
             lines.append(f"Age: {murderer['age']} | Occupation: {murderer['occupation']}")
             lines.append(f"Gender: {murderer['gender']}")
@@ -299,9 +310,9 @@ class AccusationResultsModal:
             real_murderer = self.master_data.suspects[self.master_data.case_state["murderer"]]
             accused_briefing = self.orchestrator.get_suspect_briefing(self.accused_name)
 
-            lines.append("═" * 70)
+            lines.append("")
             lines.append(f"✗ INCORRECT - {self.accused_name.upper()} IS INNOCENT")
-            lines.append("═" * 70)
+            lines.append("")
             lines.append("")
             lines.append(f"Age: {accused['age']} | Occupation: {accused['occupation']}")
             lines.append(f"Gender: {accused['gender']}")
@@ -345,7 +356,7 @@ class AccusationResultsModal:
         # Semi-transparent overlay
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         overlay.set_alpha(200)
-        overlay.fill((0, 0, 0))
+        overlay.fill(style.INK)
         surface.blit(overlay, (0, 0))
 
         # Use cached content or show loading message
@@ -360,14 +371,8 @@ class AccusationResultsModal:
         max_height = int(SCREEN_HEIGHT * 0.85)
         self.height = min(content_height, max_height)
 
-        # Resize modal background
-        self.modal_bg = pygame.transform.scale(
-            pygame.image.load("assets/dialogue_box/20240707dragon9SlicesA.png"),
-            (self.width, self.height),
-        )
-
         # Draw modal background
-        surface.blit(self.modal_bg, (self.x, self.y))
+        _panel(surface, self)
 
         # Draw result image at top center
         image_x = self.x + (self.width - self.result_image.get_width()) // 2
@@ -383,26 +388,19 @@ class AccusationResultsModal:
         start_line = min(self.scroll_offset, max(0, len(lines) - max_visible_lines))
         for i, line in enumerate(lines[start_line : start_line + max_visible_lines]):
             if line.strip():
-                line_surface = self.text_font.render(line, True, LIGHT_GRAY)
+                line_surface = self.text_font.render(line, False, _line_color(line))
                 surface.blit(line_surface, (content_x, content_y))
             content_y += line_height
 
         # Draw close button
         close_button_rect = self.get_close_button_rect()
-        pygame.draw.rect(surface, (100, 50, 50), close_button_rect, 2)
-
-        # Draw X
-        x_font = pygame.font.Font(None, 28)
-        x_text = x_font.render("X", True, WHITE)
-        x_x = close_button_rect.centerx - x_text.get_width() // 2
-        x_y = close_button_rect.centery - x_text.get_height() // 2
-        surface.blit(x_text, (x_x, x_y))
+        _close_button(surface, close_button_rect)
 
         # Draw close instruction
-        close_font = pygame.font.Font(None, 16)
-        close_text = close_font.render("Press ESC or click to close", True, LIGHT_GRAY)
+        close_font = style.font(13)
+        close_text = close_font.render("ESC or click to close", False, style.DUSK)
         close_x = self.x + (self.width - close_text.get_width()) // 2
-        close_y = self.y + self.height - 25
+        close_y = self.y + self.height - 52
         surface.blit(close_text, (close_x, close_y))
 
     def get_close_button_rect(self):
@@ -449,9 +447,9 @@ class IntroductionModal:
         self.modal_bg = pygame.transform.scale(modal_bg, (self.width, self.height))
 
         # Create fonts
-        self.title_font = pygame.font.Font(None, 40)
-        self.subtitle_font = pygame.font.Font(None, 26)
-        self.text_font = pygame.font.Font(None, 20)
+        self.title_font = style.font(29, title=True)
+        self.subtitle_font = style.font(19)
+        self.text_font = style.font(18)
 
     def generate_intro_content(self):
         """Generate the introduction content"""
@@ -462,16 +460,13 @@ class IntroductionModal:
         crime_location = self.master_data.crime_location
         time_of_death = self.master_data.time_of_death
 
-        lines.append("")
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("A MURDER AT BLY MANOR")
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         lines.append("")
         lines.append(f"The body of {victim} was discovered in {crime_location}.")
         lines.append(f"Time of death: {time_of_death}")
         lines.append("")
-        lines.append(f"Six suspects were present at Bly Manor that night.")
-        lines.append("One of them is a murderer.")
+        lines.append(f"Six people were at Bly Manor that night. One is dead.")
+        lines.append(f"One of the {num_suspects} left is a murderer.")
         lines.append("")
         lines.append("YOUR MISSION:")
         lines.append("• Interview all suspects carefully")
@@ -485,8 +480,6 @@ class IntroductionModal:
         lines.append("When you're certain, make your ACCUSATION.")
         lines.append("")
         lines.append("The truth awaits in the shadows...")
-        lines.append("")
-        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 
         return lines
 
@@ -498,7 +491,7 @@ class IntroductionModal:
         # Semi-transparent overlay
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
         overlay.set_alpha(200)
-        overlay.fill((0, 0, 0))
+        overlay.fill(style.INK)
         surface.blit(overlay, (0, 0))
 
         lines = self.generate_intro_content()
@@ -509,14 +502,8 @@ class IntroductionModal:
         max_height = int(SCREEN_HEIGHT * 0.85)
         self.height = min(content_height, max_height)
 
-        # Resize modal background
-        self.modal_bg = pygame.transform.scale(
-            pygame.image.load("assets/dialogue_box/20240707dragon9SlicesA.png"),
-            (self.width, self.height),
-        )
-
         # Draw modal background
-        surface.blit(self.modal_bg, (self.x, self.y))
+        _panel(surface, self)
 
         # Draw content with scroll support
         content_x = self.x + 80
@@ -527,26 +514,19 @@ class IntroductionModal:
         start_line = min(self.scroll_offset, max(0, len(lines) - max_visible_lines))
         for i, line in enumerate(lines[start_line : start_line + max_visible_lines]):
             if line.strip():
-                line_surface = self.text_font.render(line, True, LIGHT_GRAY)
+                line_surface = self.text_font.render(line, False, _line_color(line))
                 surface.blit(line_surface, (content_x, content_y))
             content_y += line_height
 
         # Draw close button (X in top right)
         close_button_rect = self.get_close_button_rect()
-        pygame.draw.rect(surface, (100, 50, 50), close_button_rect, 2)
-
-        # Draw X
-        x_font = pygame.font.Font(None, 28)
-        x_text = x_font.render("X", True, WHITE)
-        x_x = close_button_rect.centerx - x_text.get_width() // 2
-        x_y = close_button_rect.centery - x_text.get_height() // 2
-        surface.blit(x_text, (x_x, x_y))
+        _close_button(surface, close_button_rect)
 
         # Draw close instruction
-        close_font = pygame.font.Font(None, 16)
-        close_text = close_font.render("Press ESC or click to close", True, LIGHT_GRAY)
+        close_font = style.font(13)
+        close_text = close_font.render("ESC or click to close", False, style.DUSK)
         close_x = self.x + (self.width - close_text.get_width()) // 2
-        close_y = self.y + self.height - 25
+        close_y = self.y + self.height - 52
         surface.blit(close_text, (close_x, close_y))
 
     def get_close_button_rect(self):
