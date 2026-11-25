@@ -20,21 +20,19 @@ class AgentCommunicationManager:
     Agents share information based on their relationships and personalities.
     """
 
-    def __init__(self, agents_dict, relationships, case_state, visualizer=None, orchestrator=None):
+    def __init__(self, agents_dict, relationships, case_state, visualizer=None):
         """
         Args:
             agents_dict: Dict of agent_name -> SuspectAgent
             relationships: Dict of relationship_pair -> relationship_type
             case_state: The case state dict
-            visualizer: Optional visualization manager to show communication arrows
-            orchestrator: Optional orchestrator agent to receive gossip summaries
+            visualizer: Optional rumor board to show gossip travelling
         """
         self.agents = agents_dict
         self.relationships = relationships
         self.case_state = case_state
         self.visualizer = visualizer
-        self.orchestrator = orchestrator
-        self.communication_log = []
+
 
     def _get_relationship_type(self, agent1_name, agent2_name):
         """Get the relationship type between two agents"""
@@ -66,7 +64,6 @@ class AgentCommunicationManager:
         Trigger communications between agents after a detective interrogation.
         Runs in background thread to prevent UI freeze.
         """
-        print(f"\n🔄 CHAOS MODE: Agents are gossiping about {last_interrogated_suspect}...\n")
 
         interrogated_agent = self.agents.get(last_interrogated_suspect)
         if not interrogated_agent:
@@ -106,7 +103,6 @@ class AgentCommunicationManager:
         Conduct a conversation between two agents where one shares interrogation details.
         """
         agent1 = self.agents[agent1_name]
-        agent2 = self.agents[agent2_name]
 
         share_prompt = f"""You are {agent1_name}. You were just interrogated by a detective.
 
@@ -129,36 +125,6 @@ Tell them about the interrogation naturally (1-2 sentences). Adjust honesty to m
             )
 
             agent1_share = response.choices[0].message.content
-
-            react_prompt = f"""You are {agent2_name}.
-
-{agent1_name} ({rel_type}) just told you: "{agent1_share}"
-
-Your personality: Trust {agent2.personality_levels.get('Trust', 3)}/5, Anxious {agent2.personality_levels.get('Anxious', 3)}/5, Moody {agent2.personality_levels.get('Moody', 3)}/5
-
-React to what they said naturally (1-2 sentences)."""
-
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": react_prompt}],
-                temperature=0.8,
-                max_tokens=150
-            )
-
-            agent2_response = response.choices[0].message.content
-
-            comm_record = {
-                "from": agent1_name,
-                "to": agent2_name,
-                "relationship": rel_type,
-                "agent1_share": agent1_share,
-                "agent2_reaction": agent2_response
-            }
-            self.communication_log.append(comm_record)
-
-            print(f"💬 {agent1_name} → {agent2_name}:")
-            print(f"   \"{agent1_share}\"")
-            print(f"   {agent2_name}: \"{agent2_response}\"\n")
 
             # Let the player know the rumor mill is turning
             fx.post(fx.toast, f"{agent2_name} heard something from {agent1_name}...", style.ROSE)
@@ -190,8 +156,6 @@ React to what they said naturally (1-2 sentences)."""
             "relationship": rel_type
         })
 
-        print(f"📝 [DEBUG] {agent_name} now knows gossip from {from_agent}: \"{shared_info}\"")
-
         if rel_type == "Close Friend":
             agent.personality_levels['Trust'] = min(5, agent.personality_levels['Trust'] + 0.5)
 
@@ -206,16 +170,7 @@ React to what they said naturally (1-2 sentences)."""
             agent.personality_levels['Moody'] = min(5, agent.personality_levels['Moody'] + 0.3)
             agent.personality_levels['Trust'] = max(0, agent.personality_levels['Trust'] - 0.3)
 
-        # Send the latest gossip to the orchestrator for narrative tracking
-        if agent.gossip_heard and self.orchestrator:
-            latest = agent.gossip_heard[-1]
-            summary = f"{latest.get('from', 'Unknown')} told {agent_name}: {latest.get('info', '')}"
-            self.orchestrator.record_agent_gossip(agent_name, summary)
 
         # Visualize the personality update
         if self.visualizer:
             self.visualizer.send_personality_update(agent_name, agent.personality_levels)
-
-    def get_communication_log(self):
-        """Get the full log of inter-agent communications"""
-        return self.communication_log

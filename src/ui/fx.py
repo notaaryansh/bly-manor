@@ -9,9 +9,6 @@ import pygame
 from src.ui import style
 
 
-def lerp(a, b, t):
-    return a + (b - a) * t
-
 
 def ease_out_cubic(t):
     t = max(0.0, min(1.0, t))

@@ -103,8 +103,6 @@ class SuspectAgent:
 
         gossip_context += "Remember: This accumulated gossip might be incomplete or distorted, but it's what you've learned from your network.\n"
 
-        print(f"🔍 [DEBUG] {self.name} including local gossip context in prompt: {len(self.gossip_heard)} total pieces of gossip")
-
         return gossip_context
 
     def _build_system_prompt(self, conversation_history=None):
@@ -409,10 +407,6 @@ Return ONLY the JSON object."""
         except (json.JSONDecodeError, KeyError):
             # If analysis fails, return empty changes
             return {}
-
-    def reset_conversation(self):
-        """Reset the conversation history"""
-        self.conversation_history = []
 
     def get_personality_state(self):
         """Get the current personality state"""

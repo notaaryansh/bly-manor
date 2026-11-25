@@ -272,7 +272,7 @@ class AccusationResultsModal:
             murderer_briefing = self.orchestrator.get_suspect_briefing(self.accused_name)
 
             lines.append("")
-            lines.append(f"✓ CORRECT - {self.accused_name.upper()} IS THE MURDERER")
+            lines.append(f"CORRECT: {self.accused_name.upper()} IS THE MURDERER")
             lines.append("")
             lines.append("")
             lines.append(f"Age: {murderer['age']} | Occupation: {murderer['occupation']}")
@@ -303,7 +303,7 @@ class AccusationResultsModal:
             lines.append(f"  When confronted with the evidence, {self.accused_name}")
             lines.append(f"  admitted to the crime. They have been arrested.")
             lines.append("")
-            lines.append("CASE STATUS: SOLVED ✓")
+            lines.append("CASE STATUS: SOLVED")
 
         else:
             # Incorrect accusation
@@ -311,7 +311,7 @@ class AccusationResultsModal:
             accused_briefing = self.orchestrator.get_suspect_briefing(self.accused_name)
 
             lines.append("")
-            lines.append(f"✗ INCORRECT - {self.accused_name.upper()} IS INNOCENT")
+            lines.append(f"INCORRECT: {self.accused_name.upper()} IS INNOCENT")
             lines.append("")
             lines.append("")
             lines.append(f"Age: {accused['age']} | Occupation: {accused['occupation']}")

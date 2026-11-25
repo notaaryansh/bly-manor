@@ -5,7 +5,6 @@ the sound react to every swing in their mood.
 """
 import threading
 import pygame
-from src.config import *
 from src.ui import style, sound
 from src.ui.fx import fx, ease_out_back, ease_out_cubic
 from src.ui.emotion import SuspectSprite, LABELS, choose, shake_for, SHOCKED, IRRITATED, NERVOUS
@@ -53,7 +52,6 @@ class ConversationScreen:
         self.opening_statement = None
         self.response_cache = {}
         self.conversation_started = False
-        self.session_snippets = []
         self.scroll_offset = 0
 
         # presentation
@@ -82,9 +80,6 @@ class ConversationScreen:
                 self.sprite.thinking = True
                 threading.Thread(target=self._fetch_opening_statement, daemon=True).start()
 
-    def get_window_rect(self):
-        return pygame.Rect(0, 0, self.screen_width, self.screen_height)
-
     def _fetch_opening_statement(self):
         try:
             statement = self.agent.get_opening_statement()
@@ -112,9 +107,6 @@ class ConversationScreen:
                 self.response_cache[self.loading_message] = response
                 if self.visualizer:
                     self.visualizer.send_interaction(self.name, duration=180)
-                if self.agent.orchestrator:
-                    self.agent.orchestrator.record_suspect_response(
-                        self.name, self.loading_message, response, self.agent.get_personality_state())
         except Exception as e:
             self.pending_response = f"...I don't want to talk right now. ({e.__class__.__name__})"
         finally:
@@ -214,7 +206,6 @@ class ConversationScreen:
 
         if deltas and self.visualizer:
             self.visualizer.send_personality_update(self.name, current)
-            self.visualizer.send_feedback_to_orchestrator(self.name)
         if self.logs_modal:
             threading.Thread(target=self.logs_modal.generate_snippet_for_suspect,
                              args=(self.name, self), daemon=True).start()

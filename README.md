@@ -1,84 +1,73 @@
-# Murder at Bly Manor
+# bly manor
 
-A pixel-art detective game where every suspect is an AI with its own story, secrets and temper.
+murder mystery game where every suspect is an ai and they all lie to you lol
 
-Someone was killed at Bly Manor last night. Six people were in the house. One is dead, one of the other five did it, and none of them are going to make this easy.
+![talking to david, he gets nervous then annoyed then freaks out](docs/screenshots/interrogation.gif)
 
-![Interrogating David: he gets nervous, then irritated, then shaken](docs/screenshots/interrogation.gif)
+so basically someone got killed at bly manor last night. theres 6 people in the house, one of them is dead and one of the other 5 did it. you go talk to them one by one and try to figure out who
 
-## How it plays
+every game is a new case btw. the ai makes up the victim, the killer, why they did it, everyones alibis and who hates who. so you cant just memorize it
 
-Every game is a new case. The victim, the killer, the motive, the weapon, the alibis and the web of relationships between the guests are all written fresh, so you can't memorize your way to the answer.
+the suspects are nick (lawyer), sarah (artist), james (chef), emma (tech), david (writer) and lisa (musician). any of them can end up dead and any of the rest can be the killer
 
-You question the suspects one at a time, in your own words. There are no dialogue trees: ask anything, and they answer in character, in their own room of the manor.
+## how it works
 
-- **Read the room.** Every suspect has three moods that shift as you talk: **Nerves**, **Temper** and **Trust**. You see it on their face. Push too hard and they break into a sweat and start mixing up their story. Be rude and the anger mark comes out. Treat them with respect and they open up. Hit a nerve and the whole room shakes.
-- **Catch the lie.** Innocent suspects still hide things: affairs, debts, grudges. The killer has a story to protect. Compare what each of them tells you and look for the cracks.
-- **Use your notes.** Press **Tab** in any interrogation to read back everything that suspect has said. **Facts** keeps the case details in one place and **Logs** tracks your investigation.
-- **Make the call.** When you're sure, hit **Accuse**. The gavel comes down, and you'll find out whether you got it right and what really happened.
+you just type questions, theres no dialogue options or anything. ask whatever
 
-<p>
-  <img src="docs/screenshots/interrogation.png" width="49%" alt="David, irritated, in the drawing room">
-  <img src="docs/screenshots/shaken.png" width="49%" alt="David shaken by a question about the letter">
-</p>
+each suspect has nerves, temper and trust and it changes based on how you talk to them. you can see it on their face too, they start sweating if theyre nervous, get the little anger thing if you piss them off, and if you hit a nerve the whole screen shakes. be nice and they open up more, be a jerk and they lie more (kinda like real life idk)
 
-## The guests
+innocent people lie too btw. everyone has some secret (affairs, money stuff, whatever) so dont assume the liar is the killer
 
-| Name | Occupation | Personality |
-| --- | --- | --- |
-| **Nick** | Lawyer | Intelligent, ambitious, witty |
-| **Sarah** | Artist | Creative, sensitive, observant |
-| **James** | Chef | Charming, confident, jealous |
-| **Emma** | Tech worker | Logical, introverted, calculated |
-| **David** | Writer | Observant, sarcastic, moody |
-| **Lisa** | Musician | Expressive, emotional, loyal |
-
-Any one of them can be the victim, and any of the rest can be the killer.
-
-![The case board with the rumor board beside it](docs/screenshots/board.png)
-
-## The rumor board
-
-Turn on chaos mode and the suspects talk behind your back. Leave a room and whatever you asked spreads along the house's relationships, from friends to lovers to rivals, often bent along the way. It changes how the others treat you next.
-
-The rumor board pins every guest to a corkboard, joined by string coloured by how they know each other. When someone passes something on, light runs down the string from the one talking to the one listening, and the line glows brighter the more it gets used. The **Whispers** card keeps the latest rumors.
-
-<img src="docs/screenshots/rumor-board.gif" width="280" alt="Gossip travelling across the rumor board">
-
-## Modes
-
-- **Chaos mode** (`--chaos true`): suspects gossip between interrogations and change their stories.
-- **Rumor board** (`--visualize true`): shows the corkboard beside the game.
-- **Practice case** (`--test true`): plays a fixed case instead of a new one.
-
-Try `python3 main.py --chaos true --visualize true` once you've solved a case or two.
+press tab while talking to someone to see everything theyve said so far. when you think you know who did it hit accuse. you get one shot
 
 <p>
-  <img src="docs/screenshots/title.png" width="32%" alt="Title screen in the storm">
-  <img src="docs/screenshots/notes.png" width="32%" alt="Notes on everything David said">
-  <img src="docs/screenshots/verdict.png" width="32%" alt="The verdict: innocent">
+  <img src="docs/screenshots/interrogation.png" width="49%" alt="david annoyed in the drawing room">
+  <img src="docs/screenshots/shaken.png" width="49%" alt="david freaking out about the letter">
 </p>
 
-## Play it
+## the rumor board
 
-You need Python 3.10+ and an OpenAI API key.
+if you turn on chaos mode they gossip behind your back. you leave a room and whatever you asked gets passed around to their friends / exes / rivals, usually twisted a bit, and then they treat you different
+
+the rumor board shows this. everyones pinned on a corkboard with string between them (color = how they know each other) and when someone tells someone something the string lights up going from one to the other. tbh my fav part
+
+<img src="docs/screenshots/rumor-board.gif" width="280" alt="gossip going around the rumor board">
+
+![the board with all the suspects and the rumor board on the side](docs/screenshots/board.png)
+
+## running it
+
+need python 3.10+ and an openai key thats it
 
 ```bash
-git clone https://github.com/notaaryansh/tuff.git && cd tuff
+git clone https://github.com/notaaryansh/bly-manor.git && cd bly-manor
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env   # add your OpenAI key
+cp .env.example .env   # put your openai key in here
 python3 main.py
 ```
 
-| Key | |
-| --- | --- |
-| Type, then **Enter** | Ask a question (Enter also skips the line that's typing out) |
-| **Tab** | Notes for this suspect |
-| **Esc** | Leave the room, close a window, or back out of an accusation |
+if you want the full thing with gossip + the rumor board:
 
-## Credits
+```bash
+python3 main.py --chaos true --visualize true
+```
 
-Interface art: Tiny RPG Dragon Regalia GUI by Gabriel "tiopalada" Lima and GUI Interface Kit by Jamie Cross (both CC0). Fonts: [Raster Forge](https://www.fontspace.com/raster-forge-font-f135159) (public domain) and [Geist Pixel](https://github.com/vercel/geist-font) (SIL OFL). The manor's rooms and the sound effects are made in code.
+flags:
+- `--chaos true` turns on the gossip
+- `--visualize true` shows the rumor board on the side
+- `--test true` same case every time, good if youre testing stuff
 
-The forest background ([Oak Woods](https://brullov.itch.io/oak-woods) by brullov) and the suspect portraits (CraftPix) are licensed packs that aren't included. Without them the game uses a night sky and shadowed silhouettes. Drop them into `assets/oak_woods_v1.0/` and `assets/potrait/` for the full look.
+controls: type and hit enter to ask (enter also skips the text typing out), tab for notes, esc to leave a room / close stuff / cancel an accusation
+
+<p>
+  <img src="docs/screenshots/title.png" width="32%" alt="title screen">
+  <img src="docs/screenshots/notes.png" width="32%" alt="notes on what david said">
+  <img src="docs/screenshots/verdict.png" width="32%" alt="wrong guess lol">
+</p>
+
+## art and stuff
+
+ui art is tiny rpg dragon regalia gui by gabriel "tiopalada" lima and gui interface kit by jamie cross (both cc0). fonts are [raster forge](https://www.fontspace.com/raster-forge-font-f135159) and [geist pixel](https://github.com/vercel/geist-font). the rooms and the sound effects are just made in code
+
+the forest background ([oak woods](https://brullov.itch.io/oak-woods) by brullov) and the character portraits (craftpix) are paid packs so theyre not in the repo. game still works without them, you just get silhouettes and a plain sky. if you have them put them in `assets/oak_woods_v1.0/` and `assets/potrait/` (yes potrait is spelled wrong, its staying)

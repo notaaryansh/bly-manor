@@ -90,8 +90,6 @@ class MurderMysteryGame:
 
     def setup_game(self):
         """Initialize the game with a new case"""
-        print("🔍 Setting up murder mystery case...\n")
-
         # Generate case or load test case
         self.master = MurderMysteryMaster()
 
@@ -126,7 +124,6 @@ class MurderMysteryGame:
 
         # Initialize visualization if enabled (BEFORE creating conversation screens)
         if self.visualize_mode:
-            print("🎨 Starting agent behavior visualization...\n")
             # Visualization panel on the right side
             viz_start_x = SCREEN_WIDTH
             viz_start_y = 0
@@ -144,13 +141,11 @@ class MurderMysteryGame:
         # Initialize communication manager for chaos mode
         self.communication_manager = None
         if self.chaos_mode:
-            print("🌪️ CHAOS MODE ENABLED: Agents will gossip about interrogations...\n")
             self.communication_manager = AgentCommunicationManager(
                 {},  # Will be populated with agents dict
                 self.master.relationships,
                 self.master.case_state,
-                self.visualizer if self.visualize_mode else None,  # Pass visualizer for arrows
-                self.orchestrator  # Pass orchestrator to receive gossip summaries
+                self.visualizer if self.visualize_mode else None,
             )
 
         # Create menu buttons (left side)
@@ -226,17 +221,6 @@ class MurderMysteryGame:
             for suspect_name in self.conversation_screens.keys():
                 self.visualizer.send_orchestrator_briefing(suspect_name)  # Default 180 frames = 3 seconds
 
-        # Print case info to terminal
-        print("=" * 80)
-        print("MURDER MYSTERY - CASE BRIEFING")
-        print("=" * 80)
-        print(f"🔴 VICTIM: {self.master.victim}")
-        print(f"🔪 MURDERER: {self.master.murderer}")
-        print(f"📍 CRIME LOCATION: {self.master.crime_location}")
-        print(f"☠️  CAUSE OF DEATH: {self.master.cause_of_death}")
-        print(f"⏰ TIME OF DEATH: {self.master.time_of_death}\n")
-
-        print("✅ Game setup complete!\n")
         return True
 
     def _load_test_case(self):
@@ -568,10 +552,6 @@ class MurderMysteryGame:
 
     def run(self):
         """Main game loop"""
-        print("🔍 " * 20)
-        print("WELCOME TO MURDER MYSTERY DETECTIVE GAME")
-        print("🔍 " * 20 + "\n")
-
         # Setup game
         if not self.setup_game():
             return
