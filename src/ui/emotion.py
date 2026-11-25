@@ -197,7 +197,7 @@ class SuspectSprite:
         elif emo == IRRITATED:
             # throbbing anger vein (classic four-corner mark), pulsing in size
             mark = _VEIN_BIG if (frame // 9) % 2 else _VEIN_SMALL
-            cell = max(2, round(rect.w / 64 * 1.5))
+            cell = max(2, round(rect.w / 64 * (1.5 if rect.w < 300 else 1.0)))
             n = len(mark)
             ox, oy = self._p(rect, 55, 5)
             ox -= n * cell // 2

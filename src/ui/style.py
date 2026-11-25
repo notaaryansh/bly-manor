@@ -156,6 +156,26 @@ def text(surface, msg, pos, size=20, color=PARCHMENT, title=False, shadow=True, 
     return rect
 
 
+def text_mid(surface, msg, x, cy, size=20, color=PARCHMENT, title=False, align="left", shadow=True, alpha=255):
+    """
+    Text whose CAP HEIGHT is centred on cy, so rows of mixed fonts and sizes
+    share one visual centre line. align: left | center | right (x is that edge).
+    """
+    f = font(size, title)
+    cap = (f.metrics("H")[0] or (0, 0, 0, size * 0.7))[3]
+    top = int(round(cy - f.get_ascent() + cap / 2))
+    w = f.size(msg)[0]
+    left = x if align == "left" else x - w // 2 if align == "center" else x - w
+    return text(surface, msg, (left, top), size, color, title, shadow, False, alpha)
+
+
+def cap_top(size, title=False):
+    """Offset from a text's draw y to the top of its capital letters."""
+    f = font(size, title)
+    cap = (f.metrics("H")[0] or (0, 0, 0, size * 0.7))[3]
+    return f.get_ascent() - cap
+
+
 def wrap(msg, size, max_width, title=False):
     """Split text into lines that fit max_width at this font size."""
     f = font(size, title)

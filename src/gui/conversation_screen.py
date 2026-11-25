@@ -11,7 +11,20 @@ from src.ui.fx import fx, ease_out_back, ease_out_cubic
 from src.ui.emotion import SuspectSprite, LABELS, choose, shake_for, SHOCKED, IRRITATED, NERVOUS
 from src.ui.scene import Room
 
-TEXTBOX = pygame.Rect(56, 628, 1288, 252)
+# ---- layout: everything sits on an 8px grid -------------------------------
+G = 8
+MARGIN = 6 * G                 # 48: screen edge to any panel
+FRAME = 16                     # gold border + inner rim of the 9-slice, at 2x
+PAD = FRAME + 3 * G            # 40: frame edge to content
+SCREEN_W, SCREEN_H = 1400, 900
+TEXTBOX = pygame.Rect(MARGIN, SCREEN_H - MARGIN - 29 * G, SCREEN_W - 2 * MARGIN, 29 * G)  # 48,620 1304x232
+HEADER_CAP = 12               # cap height row of the panel header
+PANEL_CONTENT_H = HEADER_CAP + 3 * G + 2 * 5 * G + 20     # header, gap, 3 rows @40 pitch, last pip
+PANEL = pygame.Rect(SCREEN_W - MARGIN - 45 * G, MARGIN, 45 * G, PANEL_CONTENT_H + 2 * PAD)  # 992,48 360x216
+LINE_H = 36
+INPUT_ROW_H = 3 * G
+PIP_W, PIP_H, PIP_GAP = 28, 20, G
+ROW_H = 5 * G
 TEXT_SIZE = 24
 TYPE_SPEED = 1.6            # characters per frame
 MOOD_LABELS = (("Anxious", "Nerves", style.FROST), ("Moody", "Temper", style.EMBER), ("Trust", "Trust", style.MOSS))
@@ -195,7 +208,8 @@ class ConversationScreen:
             if d:
                 good = (d > 0) == (trait == "Trust")
                 self.row_flash[trait] = 50
-                fx.float_text(f"{d:+.0f} {label}", (1210, 182 + i * 46), style.MOSS if good else style.EMBER, 22)
+                fx.float_text(f"{d:+.0f} {label}", (PANEL.right - PAD - 86, self._row_cy(i) - 4),
+                              style.MOSS if good else style.EMBER, 22)
 
         if deltas and self.visualizer:
             self.visualizer.send_personality_update(self.name, current)
@@ -233,7 +247,7 @@ class ConversationScreen:
         surface.blit(style.vignette(surface.get_size()), (0, 0))
 
         speaking_player = self.line is not None and self.line["speaker"] == "You"
-        self.sprite.draw(surface, (470, TEXTBOX.y + 18), self.frame,
+        self.sprite.draw(surface, (59 * G, TEXTBOX.y + 3 * G), self.frame,
                          dim=0.45 if speaking_player else 0.0, enter=enter)
 
         self._draw_location(surface, t_open)
@@ -248,29 +262,35 @@ class ConversationScreen:
             veil.set_alpha(int(255 * (1 - t_open / 16)))
             surface.blit(veil, (0, 0))
 
+    def _row_cy(self, i):
+        """Centre line of demeanor row i (rows follow a 24px header row)."""
+        return PANEL.y + PAD + HEADER_CAP + 3 * G + 10 + ROW_H * i
+
     def _draw_location(self, surface, t_open):
         slide = ease_out_back(min(1, max(0, t_open - 6) / 22))
-        x = int(-420 + 460 * slide)
-        style.text(surface, self.room.title.upper(), (x, 28), 40, style.PARCHMENT, title=True)
+        x = int(MARGIN - (1 - slide) * 460)
+        top = MARGIN - style.cap_top(40, True)          # caps start exactly on the margin
+        r = style.text(surface, self.room.title.upper(), (x, top), 40, style.PARCHMENT, title=True)
         if self.time_text:
-            style.text(surface, f"Night of the murder  ·  {self.time_text}", (x + 2, 78), 18, style.MIST)
+            style.text_mid(surface, f"Night of the murder  ·  {self.time_text}", x, r.bottom + 2 * G, 18, style.MIST)
 
     def _draw_demeanor(self, surface, enter):
-        panel = pygame.Rect(0, 0, 360, 214)
-        panel.topright = (1344 + int((1 - enter) * 400), 124)
+        panel = PANEL.move(int((1 - enter) * 420), 0)
         style.nine_slice(surface, panel, "assets/dialogue_box/20240707dragon9SlicesB.png", 24, 2, fill=style.NIGHT)
-        style.text(surface, "DEMEANOR", (panel.x + 34, panel.y + 24), 16, style.AMBER)
+        left, right = panel.x + PAD, panel.right - PAD
+        style.text_mid(surface, "DEMEANOR", left, panel.y + PAD + HEADER_CAP // 2, 14, style.AMBER)
         levels = self.agent.get_personality_state()
+        pips_left = right - (5 * PIP_W + 4 * PIP_GAP)
         for i, (trait, label, color) in enumerate(MOOD_LABELS):
             target = levels.get(trait, 0)
             cur = self.shown_levels.get(trait, target)
             cur += (target - cur) * 0.12
             self.shown_levels[trait] = cur
-            y = panel.y + 58 + i * 46
+            cy = self._row_cy(i) + (panel.x - PANEL.x) * 0
             flashing = trait in self.row_flash and (self.row_flash[trait] // 5) % 2 == 0
-            style.text(surface, label, (panel.x + 34, y + 2), 20, style.PARCHMENT if flashing else style.MIST)
+            style.text_mid(surface, label, left, cy, 20, style.PARCHMENT if flashing else style.MIST)
             for p in range(5):
-                r = pygame.Rect(panel.x + 150 + p * 34, y, 26, 22)
+                r = pygame.Rect(pips_left + (panel.x - PANEL.x) + p * (PIP_W + PIP_GAP), cy - PIP_H // 2, PIP_W, PIP_H)
                 fill = max(0.0, min(1.0, cur - p))
                 pygame.draw.rect(surface, style.INK, r)
                 if fill > 0:
@@ -278,64 +298,74 @@ class ConversationScreen:
                     pygame.draw.rect(surface, tuple(min(255, c + 60) for c in color), (r.x, r.y, int(r.w * fill), 4))
                 pygame.draw.rect(surface, style.PARCHMENT if flashing else style.DUSK, r, 2)
 
+        # expression chip: hugs its text, right-aligned to the panel, one grid row below
         label, color = LABELS[SHOCKED if self.sprite.shock_timer else self.sprite.emotion]
-        chip = pygame.Rect(0, 0, 220, 40)
-        chip.topright = (panel.right - 10, panel.bottom + 10)
+        tw = style.font(18).size(label)[0]
+        chip = pygame.Rect(0, 0, 2 * G + 14 + G + tw + 2 * G, 5 * G)
+        chip.topright = (panel.right, panel.bottom + 2 * G)
         pygame.draw.rect(surface, style.NIGHT, chip, border_radius=4)
         pygame.draw.rect(surface, color, chip, 2, border_radius=4)
-        pygame.draw.circle(surface, color, (chip.x + 22, chip.centery), 7)
-        style.text(surface, label, (chip.x + 40, chip.y + 10), 18, color)
+        pygame.draw.circle(surface, color, (chip.x + 2 * G + 7, chip.centery), 7)
+        style.text_mid(surface, label, chip.x + 2 * G + 14 + G, chip.centery, 18, color)
 
     def _draw_textbox(self, surface, enter):
         box = TEXTBOX.move(0, int((1 - enter) * 300))
         style.nine_slice(surface, box, "assets/dialogue_box/20240707dragon9SlicesB.png", 24, 2, fill=style.NIGHT, fill_alpha=240)
+        left, right = box.x + PAD, box.right - PAD
 
         speaker = self.line["speaker"] if self.line else self.name
         is_player = speaker == "You"
         plate_img = style.image("assets/dialogue_box/20240707dragonHeaderB.png" if is_player
-                                else "assets/dialogue_box/20240707dragonHeaderA.png", 3)
-        plate_y = box.y - 32
+                                else "assets/dialogue_box/20240707dragonHeaderA.png", 2)
         if plate_img:
-            surface.blit(plate_img, (box.x + 30, plate_y))
-            style.text(surface, "DETECTIVE" if is_player else speaker.upper(),
-                       (box.x + 30 + plate_img.get_width() // 2, plate_y + plate_img.get_height() // 2 - 2),
-                       26, style.PARCHMENT, title=True, center=True)
-        if not is_player:
-            occ = self.suspect.get("occupation", "")
-            style.text(surface, occ, (box.x + 30 + plate_img.get_width() + 16, plate_y + 34), 18, style.MIST)
+            # nameplate straddles the top border: its centre line sits on the frame's gold line
+            plate = plate_img.get_rect(midleft=(box.x + PAD, box.y + FRAME // 2))
+            surface.blit(plate_img, plate)
+            style.text_mid(surface, "DETECTIVE" if is_player else speaker.upper(), plate.centerx, plate.centery,
+                           22, style.PARCHMENT, title=True, align="center")
+            if not is_player:
+                # occupation tag pinned to the border, sharing the nameplate's centre line
+                occ = self.suspect.get("occupation", "")
+                tag = pygame.Rect(0, 0, style.font(16).size(occ)[0] + 4 * G, 3 * G)
+                tag.midleft = (plate.right + G, plate.centery)
+                pygame.draw.rect(surface, style.NIGHT, tag, border_radius=4)
+                pygame.draw.rect(surface, style.DUSK, tag, 2, border_radius=4)
+                style.text_mid(surface, occ, tag.centerx, tag.centery, 16, style.MIST, align="center", shadow=False)
 
-        hint = "ENTER ask   ·   TAB notes   ·   ESC leave"
-        hw = style.font(14).size(hint)[0]
-        style.text(surface, hint, (box.right - hw - 40, box.y + 28), 14, style.DUSK, shadow=False)
-
-        # current line
-        tx, ty = box.x + 48, box.y + 56
+        # dialogue: first line one grid row under the nameplate
+        ty = box.y + PAD + G
         if self.line:
             shown = self.line["text"][: int(self.line["shown"])]
             color = (200, 215, 255) if is_player else style.PARCHMENT
-            lines = style.wrap(shown, TEXT_SIZE, box.w - 120)
-            for i, ln in enumerate(lines[:4]):
-                style.text(surface, ln, (tx, ty + i * 34), TEXT_SIZE, color)
-            if self._line_done() and not self.sprite.thinking and not is_player:
-                bob = 4 if (self.frame // 14) % 2 else 0
-                ax, ay = box.right - 62, box.y + 168 + bob
-                pygame.draw.polygon(surface, style.AMBER, [(ax, ay), (ax + 18, ay), (ax + 9, ay + 12)])
+            for i, ln in enumerate(style.wrap(shown, TEXT_SIZE, right - left)[:3]):
+                style.text_mid(surface, ln, left, ty + LINE_H // 2 + i * LINE_H, TEXT_SIZE, color)
         elif self.sprite.thinking:
-            style.text(surface, "...", (tx, ty), TEXT_SIZE, style.MIST)
+            style.text_mid(surface, "...", left, ty + LINE_H // 2, TEXT_SIZE, style.MIST)
 
-        # input row
-        iy = box.bottom - 58
-        pygame.draw.line(surface, style.DUSK, (box.x + 40, iy - 12), (box.right - 40, iy - 12), 2)
+        # input row pinned to the bottom content edge, divider one grid row above it
+        row_cy = box.bottom - PAD - INPUT_ROW_H // 2
+        div_y = row_cy - INPUT_ROW_H // 2 - 2 * G
+        pygame.draw.line(surface, style.DUSK, (left, div_y), (right, div_y), 2)
+
+        if self.line and self._line_done() and not self.sprite.thinking and not is_player:
+            bob = 3 if (self.frame // 14) % 2 else 0
+            ax, ay = right - 18, div_y - 2 * G - 12 + bob
+            pygame.draw.polygon(surface, style.AMBER, [(ax, ay), (ax + 18, ay), (ax + 9, ay + 12)])
+
         waiting = self.is_loading or self.sprite.thinking
-        style.text(surface, ">", (tx, iy), 22, style.AMBER)
+        style.text_mid(surface, ">", left, row_cy, 22, style.AMBER)
+        input_x = left + 3 * G
         if self.user_input:
-            style.text(surface, self.user_input, (tx + 26, iy), 22, style.PARCHMENT)
+            style.text_mid(surface, self.user_input, input_x, row_cy, 22, style.PARCHMENT)
         else:
             ph = f"{self.name} is thinking..." if waiting else f"Ask {self.name} anything..."
-            style.text(surface, ph, (tx + 26, iy), 22, style.DUSK, shadow=False)
+            style.text_mid(surface, ph, input_x, row_cy, 22, style.DUSK, shadow=False)
         if not waiting and (self.frame // 20) % 2 == 0:
             cw = style.font(22).size(self.user_input)[0] if self.user_input else 0
-            pygame.draw.rect(surface, style.AMBER, (tx + 28 + cw, iy + 2, 10, 22))
+            pygame.draw.rect(surface, style.AMBER, (input_x + cw + 2, row_cy - 11, 10, 22))
+
+        style.text_mid(surface, "ENTER ask   ·   TAB notes   ·   ESC leave", right, row_cy, 14, style.MIST,
+                       align="right", shadow=False)
 
     def _draw_backlog(self, surface):
         veil = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
