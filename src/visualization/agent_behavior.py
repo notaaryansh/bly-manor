@@ -14,7 +14,8 @@ from src.ui import style, sound
 from src.ui.fx import ease_out_back, ease_in_out
 
 CARD_W, CARD_H = 88, 112
-NOTE_FRAMES = 48
+NOTE_FRAMES = 54
+AFTERGLOW = 60
 
 
 def _bezier(p0, p1, sag, t):
@@ -82,6 +83,7 @@ class AgentBehaviorVisualizer:
         self.victim = None
         self.notes = []
         self.traffic = {}
+        self.afterglow = []
         self.feed = []
         self.drop_queue = 0
         self._cork = None
@@ -170,6 +172,8 @@ class AgentBehaviorVisualizer:
                 self.feed.insert(0, (n.src, n.dst, snippet, self.frame))
                 self.feed = self.feed[:3]
                 sound.play("whisper")
+                self.afterglow.append((n.src, n.dst, self.frame))
+                self.afterglow = [g for g in self.afterglow if self.frame - g[2] < AFTERGLOW]
                 self.notes.remove(n)
 
     # ------------------------------------------------------------ drawing
@@ -192,16 +196,37 @@ class AgentBehaviorVisualizer:
             self._cork = cork
         return self._cork
 
-    def _string(self, surface, a, b, color, width, dashed=False, glow=0.0):
-        pts = [_bezier(a, b, 26, i / 16) for i in range(17)]
-        if glow > 0:
-            bright = tuple(min(255, int(c + (255 - c) * glow)) for c in color)
-            pygame.draw.lines(surface, bright, False, pts, width + 4)
-        for i in range(16):
-            if dashed and i % 2:
-                continue
-            pygame.draw.line(surface, (40, 24, 20), (pts[i][0] + 1, pts[i][1] + 2), (pts[i + 1][0] + 1, pts[i + 1][1] + 2), width)
-            pygame.draw.line(surface, color, pts[i], pts[i + 1], width)
+    def _string(self, surface, a, b, color, width):
+        pts = [_bezier(a, b, 26, i / 24) for i in range(25)]
+        shadow = [(x + 1, y + 2) for x, y in pts]
+        pygame.draw.lines(surface, (40, 24, 20), False, shadow, width)
+        pygame.draw.lines(surface, color, False, pts, width)
+
+    def _flow(self, overlay, a, b, color, width, head, fade):
+        """
+        Light running along the string from a (speaker) to b (listener).
+        head 0..1 is how far the pulse has travelled; fade 0..1 dims the afterglow.
+        """
+        n = 48
+        pts = [_bezier(a, b, 26, i / n) for i in range(n + 1)]
+        ox, oy = self.rect.topleft
+        for i in range(n):
+            s = i / n
+            if s > head:
+                break
+            tail = head - s
+            k = (0.35 + 0.65 * max(0.0, 1 - tail * 3.0)) * fade  # bright near the pulse, lit behind it
+            hot = tuple(min(255, int(c + (255 - c) * k)) for c in color)
+            p0 = (pts[i][0] - ox, pts[i][1] - oy)
+            p1 = (pts[i + 1][0] - ox, pts[i + 1][1] - oy)
+            pygame.draw.line(overlay, (*hot, int(70 * k)), p0, p1, width + 8)
+            pygame.draw.line(overlay, (*hot, int(255 * min(1, k + 0.2))), p0, p1, width + 1)
+        if head < 1 and fade > 0:
+            x, y = _bezier(a, b, 26, head)
+            c = (int(x - ox), int(y - oy))
+            pygame.draw.circle(overlay, (*color, 90), c, 14)
+            pygame.draw.circle(overlay, (255, 250, 230, 230), c, 6)
+            pygame.draw.circle(overlay, (255, 255, 255, 255), c, 3)
 
     def draw(self, surface):
         surface.blit(self._cork_surface(), self.rect.topleft)
@@ -216,14 +241,7 @@ class AgentBehaviorVisualizer:
             pygame.draw.circle(surface, style.BLOOD, (px, strip.y + 8), 6)
 
         live = {k: v for k, v in self.cards.items() if v.drop > 0}
-        if self.victim:
-            for name, card in live.items():
-                rel = self._rel(name, self.victim.name)
-                if rel:
-                    col = style.RELATIONSHIP_COLORS.get(rel, style.MIST)
-                    self._string(surface, card.pin, self.victim.pin, tuple(c // 2 + 40 for c in col), 2, dashed=True)
         names = list(live)
-        active_pairs = {tuple(sorted((n.src, n.dst))) for n in self.notes if self.frame >= n.start}
         for i, a in enumerate(names):
             for b in names[i + 1:]:
                 rel = self._rel(a, b)
@@ -232,33 +250,26 @@ class AgentBehaviorVisualizer:
                 key = tuple(sorted((a, b)))
                 traffic = self.traffic.get(key, 0)
                 col = style.RELATIONSHIP_COLORS.get(rel, style.MIST)
-                if not traffic and key not in active_pairs:
+                if not traffic:
                     col = tuple(int(c * 0.55 + 27) for c in col)
-                glow = 0.5 + 0.5 * math.sin(self.frame * 0.3) if key in active_pairs else 0
-                self._string(surface, live[a].pin, live[b].pin, col, min(6, 2 + traffic), glow=glow * 0.5)
+                self._string(surface, live[a].pin, live[b].pin, col, min(5, 2 + traffic))
+
+        # light flowing from speaker to listener, then a fading afterglow
+        overlay = pygame.Surface(r.size, pygame.SRCALPHA)
+        flows = [(n.src, n.dst, ease_in_out((self.frame - n.start) / NOTE_FRAMES), 1.0)
+                 for n in self.notes if self.frame >= n.start]
+        flows += [(src, dst, 1.0, 1 - (self.frame - at) / AFTERGLOW)
+                  for src, dst, at in self.afterglow if self.frame - at < AFTERGLOW]
+        for src, dst, head, fade in flows:
+            if src in live and dst in live:
+                col = style.RELATIONSHIP_COLORS.get(self._rel(src, dst), style.PARCHMENT)
+                self._flow(overlay, live[src].pin, live[dst].pin, col, 3, head, fade)
+        surface.blit(overlay, r.topleft)
 
         if self.victim:
             self._card(surface, self.victim)
         for card in sorted(live.values(), key=lambda c: c.questioned > 0):
             self._card(surface, card)
-
-        for n in self.notes:
-            t = (self.frame - n.start) / NOTE_FRAMES
-            if t < 0:
-                continue
-            a, b = self.cards[n.src].pin, self.cards[n.dst].pin
-            for k in range(1, 6):  # fading trail
-                tp = max(0.0, ease_in_out(t) - k * 0.04)
-                x, y = _bezier(a, b, 26, tp)
-                pygame.draw.rect(surface, (255, 240, 200), (x - 3 + k, y - 3 + k, 6 - k, 6 - k))
-            x, y = _bezier(a, b, 26, ease_in_out(t))
-            bob = math.sin(self.frame * 0.5) * 2
-            note = pygame.Rect(0, 0, 22, 16)
-            note.center = (x, y - 8 + bob)
-            pygame.draw.rect(surface, style.INK, note.move(2, 2))
-            pygame.draw.rect(surface, (250, 244, 224), note)
-            pygame.draw.polygon(surface, (210, 200, 176), [note.topleft, note.topright, (note.centerx, note.centery + 1)])
-            pygame.draw.rect(surface, style.EMBER, (note.centerx - 3, note.centery - 1, 6, 5))
 
         self._legend(surface)
         self._feed(surface)
@@ -309,12 +320,6 @@ class AgentBehaviorVisualizer:
             pygame.draw.rect(surface, col, (bx, by, int(24 * min(5, v) / 5), 6))
             if card.rattle and (card.rattle // 4) % 2:
                 pygame.draw.rect(surface, style.PARCHMENT, (bx, by, 24, 6), 1)
-
-        if card.questioned:  # magnifying glass
-            gx, gy = rect.right - 4, rect.y + 20 + int(math.sin(self.frame * 0.12) * 4)
-            pygame.draw.line(surface, (90, 60, 40), (gx + 8, gy + 8), (gx + 18, gy + 18), 5)
-            pygame.draw.circle(surface, (200, 230, 255), (gx, gy), 10)
-            pygame.draw.circle(surface, style.INK, (gx, gy), 10, 3)
 
         if card.bubble:
             pop = ease_out_back(min(1, (90 - card.bubble) / 10))
