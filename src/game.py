@@ -486,6 +486,7 @@ class MurderMysteryGame:
 
     def _present(self):
         """Overlay fx, then show the canvas with screen shake / zoom punch."""
+        fx.show_toasts = self.game_started and not self.active_conversation
         fx.draw_overlay(self.screen, SCREEN_WIDTH)
         fx.present(self.display, self.screen)
         pygame.display.flip()

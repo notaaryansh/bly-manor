@@ -35,9 +35,9 @@ class _Floater:
 
     def draw(self, surface):
         t = self.age / self.life
-        y = self.y - 46 * ease_out_cubic(t)
+        y = self.y - 28 * ease_out_cubic(t)
         alpha = 255 if t < 0.6 else int(255 * (1 - (t - 0.6) / 0.4))
-        pop = 1 + 0.6 * max(0.0, 1 - self.age / 8)
+        pop = 1 + 0.25 * max(0.0, 1 - self.age / 8)
         style.text(surface, self.msg, (self.x, y), int(self.size * pop), self.color, center=True, alpha=alpha)
 
 
@@ -55,6 +55,7 @@ class FX:
         self.floaters = []
         self.toasts = []
         self.punch = 0.0  # zoom punch, decays to 0
+        self.show_toasts = True
         self.frame = 0
         self._inbox = queue.Queue()
 
@@ -127,21 +128,24 @@ class FX:
             f.draw(surface)
         prev_clip = surface.get_clip()
         surface.set_clip(pygame.Rect(0, 0, area_width, surface.get_height()))
-        # toasts stack upward from the bottom-right margin, the board's empty corner
-        margin, h, gap = 48, 48, 8
-        bottom = surface.get_height() - margin
-        for i, t in enumerate(reversed(self.toasts)):
-            slide = ease_out_back(min(1, t.age / 18))
-            out = 1 - ease_in_out(max(0, (t.age - t.life + 30) / 30))
-            msg_w = style.font(18).size(t.msg)[0] + 64
-            right = area_width - margin
-            x = right - msg_w + int((1 - slide * out) * (msg_w + margin))
-            rect = pygame.Rect(x, bottom - h - i * (h + gap), msg_w, h)
-            style.nine_slice(surface, rect, "assets/dialogue_box/20240707dragon9SlicesD.png", 12, 2, fill=style.NIGHT)
-            pygame.draw.circle(surface, t.color, (rect.x + 26, rect.centery), 7)
-            if (t.age // 10) % 2 == 0 and t.age < 90:
-                pygame.draw.circle(surface, style.PARCHMENT, (rect.x + 26, rect.centery), 7, 2)
-            style.text_mid(surface, t.msg, rect.x + 44, rect.centery, 18, style.PARCHMENT)
+        # toasts live in the case-file column: left margin, its width, stacking up from the bottom margin
+        if self.show_toasts:
+            margin, width, gap = 48, 240, 8
+            bottom = surface.get_height() - margin
+            for t in reversed(self.toasts):
+                lines = style.wrap(t.msg, 16, width - 56)[:2]
+                h = 20 + 22 * len(lines)
+                slide = ease_out_back(min(1, t.age / 18))
+                out = 1 - ease_in_out(max(0, (t.age - t.life + 30) / 30))
+                x = margin - int((1 - slide * out) * (width + margin))
+                rect = pygame.Rect(x, bottom - h, width, h)
+                style.nine_slice(surface, rect, "assets/dialogue_box/20240707dragon9SlicesD.png", 12, 2, fill=style.NIGHT)
+                pygame.draw.circle(surface, t.color, (rect.x + 24, rect.centery), 7)
+                if (t.age // 10) % 2 == 0 and t.age < 90:
+                    pygame.draw.circle(surface, style.PARCHMENT, (rect.x + 24, rect.centery), 7, 2)
+                for i, ln in enumerate(lines):
+                    style.text_mid(surface, ln, rect.x + 42, rect.y + 21 + i * 22, 16, style.PARCHMENT)
+                bottom -= h + gap
         surface.set_clip(prev_clip)
 
 
