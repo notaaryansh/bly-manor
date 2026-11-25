@@ -87,10 +87,27 @@ def sheet_frames(path, count, scale=1):
     return frames
 
 
+# Interior colours of the Dragon Regalia frames, swapped for our own fill
+_FRAME_INTERIOR = ((69, 94, 177), (67, 147, 214), (244, 161, 58), (93, 153, 196), (136, 184, 196))
+
+
+def _recolored(path, fill, alpha):
+    key = ("recolor", path, fill, alpha)
+    if key not in _images:
+        src = image(path)
+        out = src.copy()
+        px = pygame.PixelArray(out)
+        for c in _FRAME_INTERIOR:
+            px.replace(c, (*fill, alpha), distance=0.04)
+        del px
+        _images[key] = out
+    return _images[key]
+
+
 def nine_slice(surface, rect, path, border, scale=2, fill=None, fill_alpha=235):
     """
     Draw a framed panel without stretching the corners.
-    border: corner size in source pixels. fill replaces the source's centre colour.
+    border: corner size in source pixels. fill recolours the frame's interior.
     """
     rect = pygame.Rect(rect)
     src = image(path)
@@ -101,21 +118,16 @@ def nine_slice(surface, rect, path, border, scale=2, fill=None, fill_alpha=235):
     key = ("nine", path, border, scale, rect.size, fill, fill_alpha)
     panel = _images.get(key)
     if panel is None:
+        if fill is not None:
+            src = _recolored(path, fill, fill_alpha)
         sw, sh = src.get_size()
         b = border
         db = b * scale
         panel = pygame.Surface(rect.size, pygame.SRCALPHA)
-        if fill is not None:
-            inner = pygame.Surface((rect.w - db, rect.h - db), pygame.SRCALPHA)
-            inner.fill((*fill, fill_alpha))
-            panel.blit(inner, (db // 2, db // 2))
-        # source slices: (sx, sy, sw, sh) -> (dx, dy, dw, dh)
         cols = [(0, b, 0, db), (b, sw - 2 * b, db, rect.w - 2 * db), (sw - b, b, rect.w - db, db)]
         rows = [(0, b, 0, db), (b, sh - 2 * b, db, rect.h - 2 * db), (sh - b, b, rect.h - db, db)]
-        for ri, (sy, shh, dy, dh) in enumerate(rows):
-            for ci, (sx, sww, dx, dw) in enumerate(cols):
-                if ri == 1 and ci == 1 and fill is not None:
-                    continue
+        for sy, shh, dy, dh in rows:
+            for sx, sww, dx, dw in cols:
                 if dw <= 0 or dh <= 0:
                     continue
                 piece = src.subsurface((sx, sy, sww, shh))
