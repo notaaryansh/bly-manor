@@ -18,24 +18,30 @@ from src.gui import (
 from src.agents import MurderMysteryMaster, SuspectAgent, AgentOrchestrator, AgentCommunicationManager
 from src.utils import init_cursors, set_default_cursor, set_map_frame_cursor, ParallaxBackground
 from src.visualization import AgentBehaviorVisualizer
+from src.ui.fx import fx, ease_out_back
+from src.ui import style, sound
+import math
+import random
 
 
-def get_card_positions():
-    """Calculate card positions (3x2 grid)"""
+def cards_left():
+    """Cards are centred in the space right of the menu column."""
+    region_x = MENU_X + MENU_W + MARGIN
+    region_w = SCREEN_WIDTH - MARGIN - region_x
+    grid_w = CARDS_PER_ROW * CARD_WIDTH + (CARDS_PER_ROW - 1) * CARD_PADDING
+    return region_x + (region_w - grid_w) // 2
+
+
+def get_card_positions(count=5):
+    """Card grid; a short last row is centred under the full rows."""
     positions = []
-    left_padding = 150
-    start_x = (
-        SCREEN_WIDTH - (CARDS_PER_ROW * CARD_WIDTH + (CARDS_PER_ROW - 1) * CARD_PADDING)
-    ) // 2
-    start_x += left_padding
-    start_y = 150
-
-    for row in range(2):
-        for col in range(CARDS_PER_ROW):
-            x = start_x + col * (CARD_WIDTH + CARD_PADDING)
-            y = start_y + row * (CARD_HEIGHT + CARD_PADDING)
-            positions.append((x, y))
-
+    step_x, step_y = CARD_WIDTH + CARD_PADDING, CARD_HEIGHT + CARD_PADDING
+    rows = (count + CARDS_PER_ROW - 1) // CARDS_PER_ROW
+    for row in range(rows):
+        n = min(CARDS_PER_ROW, count - row * CARDS_PER_ROW)
+        offset = (CARDS_PER_ROW - n) * step_x // 2
+        for col in range(n):
+            positions.append((cards_left() + offset + col * step_x, GRID_TOP + row * step_y))
     return positions
 
 
@@ -52,7 +58,9 @@ class MurderMysteryGame:
             screen_height = SCREEN_HEIGHT
 
         # Create screen
-        self.screen = pygame.display.set_mode((screen_width, screen_height))
+        self.display = pygame.display.set_mode((screen_width, screen_height))
+        # Everything draws to this canvas; fx.present() adds shake and zoom when showing it
+        self.screen = pygame.Surface((screen_width, screen_height))
         pygame.display.set_caption("Murder Mystery - The Mansion")
 
         # Clock for FPS
@@ -146,11 +154,11 @@ class MurderMysteryGame:
             )
 
         # Create menu buttons (left side)
-        button_width = 240
-        button_height = 200
-        button_x = 20
-        button_y_start = 200
-        button_spacing = 200
+        button_width = MENU_W
+        button_height = 84
+        button_x = MENU_X
+        button_y_start = GRID_TOP + 40     # under the CASE FILE label
+        button_spacing = button_height + 16
 
         self.menu_buttons = [
             MenuButton("FACTS", button_x, button_y_start, button_width, button_height),
@@ -163,7 +171,8 @@ class MurderMysteryGame:
         ]
 
         # Create character cards and conversation screens
-        card_positions = get_card_positions()
+        card_positions = get_card_positions(
+            len([n for n, sus in self.master.suspects.items() if not sus["is_victim"]]))
         card_index = 0
 
         for suspect_name in sorted(self.master.suspects.keys()):
@@ -358,12 +367,7 @@ class MurderMysteryGame:
                         self.accusation_modal.toggle()
                     # Handle conversation screen
                     elif self.active_conversation:
-                        window_rect = self.conversation_screens[
-                            self.active_conversation
-                        ].get_window_rect()
-                        if not window_rect.collidepoint(mouse_pos):
-                            self.conversation_screens[self.active_conversation].toggle()
-                            self.active_conversation = None
+                        self.conversation_screens[self.active_conversation].handle_click(mouse_pos)
                     # Handle character card clicks
                     else:
                         for i, card in enumerate(self.cards):
@@ -386,6 +390,7 @@ class MurderMysteryGame:
                                         self.conversation_screens,
                                     )
                                     self.accusation_modal.toggle()
+                                    self._start_verdict(accused_name, is_correct)
                                 else:
                                     # Open conversation screen for this suspect
                                     suspect_name = card.suspect["name"]
@@ -405,6 +410,7 @@ class MurderMysteryGame:
     def update(self):
         """Update game state"""
         self.background.update()
+        fx.update()
 
         # Update visualization if enabled
         if self.visualize_mode and self.visualizer:
@@ -415,16 +421,39 @@ class MurderMysteryGame:
         # If game hasn't started, show title screen
         if not self.game_started:
             self._draw_title_screen()
+            if self.visualize_mode and self.visualizer:
+                self.visualizer.draw(self.screen)
+            self._present()
+            return
+
+        if self.active_conversation:
+            # The interrogation scene fills the game area
+            self.conversation_screens[self.active_conversation].draw(self.screen)
+            if self.visualize_mode and self.visualizer:
+                self.visualizer.draw(self.screen)
+            self._present()
             return
 
         # Draw background
         self.background.draw(self.screen)
 
-        # Draw title
-        title_font = pygame.font.Font(None, 48)
-        title_text = title_font.render("Murder At Bly Manor", True, WHITE)
-        title_x = (SCREEN_WIDTH - title_text.get_width()) // 2
-        self.screen.blit(title_text, (title_x, 30))
+        self.screen.blit(style.vignette((SCREEN_WIDTH, SCREEN_HEIGHT), 200), (0, 0))
+
+        # Header
+        # header: left edge on the first card column, caps on the top margin
+        hx = cards_left()
+        head = style.text(self.screen, "MURDER AT BLY MANOR", (hx, MARGIN - style.cap_top(44, True)), 44,
+                          style.PARCHMENT, title=True)
+        style.text_mid(self.screen, "Five suspects. One of them did it. Choose who to question.",
+                       hx, head.bottom + 16, 18, style.MIST)
+        style.text_mid(self.screen, "CASE FILE", MENU_X, GRID_TOP + 6, 14, style.AMBER)
+
+        for card in self.cards:
+            screen = self.conversation_screens.get(card.suspect["name"])
+            card.visited = bool(screen and screen.conversation_started)
+            card.accuse_mode = self.in_accusation_mode
+        for button in self.menu_buttons:
+            button.active = button.label == "ACCUSE" and self.in_accusation_mode
 
         # Draw menu buttons
         for button in self.menu_buttons:
@@ -434,12 +463,16 @@ class MurderMysteryGame:
         for card in self.cards:
             card.draw(self.screen)
 
+        if self.in_accusation_mode:
+            self._draw_accusation_banner()
+
         # Draw modals on top
         self.introduction_modal.draw(self.screen)
         self.facts_modal.draw(self.screen)
         self.logs_modal.draw(self.screen)
         if self.accusation_modal:
             self.accusation_modal.draw(self.screen)
+        self._draw_verdict()
 
         # Draw active conversation screen
         if self.active_conversation:
@@ -449,44 +482,89 @@ class MurderMysteryGame:
         if self.visualize_mode and self.visualizer:
             self.visualizer.draw(self.screen)
 
-        # Update display
+        self._present()
+
+    def _present(self):
+        """Overlay fx, then show the canvas with screen shake / zoom punch."""
+        fx.show_toasts = self.game_started and not self.active_conversation
+        fx.draw_overlay(self.screen, SCREEN_WIDTH)
+        fx.present(self.display, self.screen)
         pygame.display.flip()
 
     def _draw_title_screen(self):
-        """Draw the title screen with game title and continue prompt"""
-        # Draw background
+        """Stormy title screen: rain, lightning, and the manor's name."""
+        self.title_frame = getattr(self, "title_frame", 0) + 1
+        f = self.title_frame
         self.background.draw(self.screen)
+        veil = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        veil.fill(style.INK)
+        veil.set_alpha(170)
+        self.screen.blit(veil, (0, 0))
 
-        # Create semi-transparent overlay
-        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-        overlay.set_alpha(150)
-        overlay.fill(BLACK)
-        self.screen.blit(overlay, (0, 0))
+        if not hasattr(self, "rain"):
+            rng = random.Random(3)
+            self.rain = [(rng.randrange(SCREEN_WIDTH + 200), rng.randrange(SCREEN_HEIGHT), rng.choice((10, 14, 18)))
+                         for _ in range(160)]
+            self.next_bolt = 150
+        for x0, y0, speed in self.rain:
+            y = (y0 + f * speed) % (SCREEN_HEIGHT + 40) - 20
+            x = (x0 - f * speed * 0.3) % (SCREEN_WIDTH + 200) - 100
+            pygame.draw.line(self.screen, (90, 100, 150), (x, y), (x - 4, y + speed), 2)
 
-        # Load and render title with raster forge font
-        try:
-            title_font = pygame.font.Font(
-                "assets/raster-forge-font/RasterForgeRegular-JpBgm.ttf", 96
-            )
-            title_text = title_font.render("Murder at Bly Manor", True, WHITE)
-        except:
-            # Fallback if font not found
-            title_font = pygame.font.Font(None, 96)
-            title_text = title_font.render("Murder at Bly Manor", True, WHITE)
+        if f == self.next_bolt:
+            fx.flash((200, 210, 255), 170)
+            fx.shake(0.35)
+            sound.play("thud")
+            self.next_bolt = f + random.randint(260, 480)
 
-        title_x = (SCREEN_WIDTH - title_text.get_width()) // 2
-        title_y = (SCREEN_HEIGHT - title_text.get_height()) // 2 - 100
-        self.screen.blit(title_text, (title_x, title_y))
+        drop = ease_out_back(min(1, f / 50))
+        ty = int(SCREEN_HEIGHT // 2 - 120 - (1 - drop) * 200)
+        style.text(self.screen, "MURDER AT", (SCREEN_WIDTH // 2, ty - 70), 48, style.MIST, title=True, center=True)
+        style.text(self.screen, "BLY MANOR", (SCREEN_WIDTH // 2, ty + 10), 120, style.PARCHMENT, title=True, center=True)
+        style.text(self.screen, "Six guests. One body. Every suspect has something to hide.",
+                   (SCREEN_WIDTH // 2, ty + 110), 20, style.MIST, center=True)
+        if f > 50 and (f // 30) % 2 == 0:
+            style.text(self.screen, "PRESS SPACE", (SCREEN_WIDTH // 2, SCREEN_HEIGHT - 190), 28,
+                       style.AMBER, title=True, center=True)
 
-        # Draw continue prompt
-        continue_font = pygame.font.Font(None, 32)
-        continue_text = continue_font.render("Press SPACE to continue", True, LIGHT_GRAY)
-        continue_x = (SCREEN_WIDTH - continue_text.get_width()) // 2
-        continue_y = title_y + title_text.get_height() + 150
-        self.screen.blit(continue_text, (continue_x, continue_y))
+    def _draw_accusation_banner(self):
+        # banner fills exactly the bottom margin, under the card grid
+        bar = pygame.Surface((SCREEN_WIDTH, MARGIN), pygame.SRCALPHA)
+        bar.fill((*style.BLOOD, 225))
+        self.screen.blit(bar, (0, SCREEN_HEIGHT - MARGIN))
+        pulse = 0.75 + 0.25 * math.sin(pygame.time.get_ticks() * 0.008)
+        style.text_mid(self.screen, "WHO DID IT?   CLICK THE KILLER   ·   ESC TO BACK OUT",
+                       SCREEN_WIDTH // 2, SCREEN_HEIGHT - MARGIN // 2, 20,
+                       tuple(int(c * pulse) for c in style.PARCHMENT), title=True, align="center")
 
-        # Update display
-        pygame.display.flip()
+    def _start_verdict(self, name, correct):
+        self.verdict = {"text": "GUILTY" if correct else "INNOCENT", "name": name,
+                        "color": style.MOSS if correct else style.BLOOD, "t": 0}
+        sound.play("gavel")
+        fx.shake(0.9)
+        fx.zoom_punch(0.06)
+        fx.flash(style.BLOOD if not correct else style.PARCHMENT, 200)
+
+    def _draw_verdict(self):
+        v = getattr(self, "verdict", None)
+        if not v:
+            return
+        v["t"] += 1
+        t = v["t"]
+        if t > 110:
+            self.verdict = None
+            return
+        veil = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        fade = 1 if t < 85 else 1 - (t - 85) / 25
+        veil.fill((*style.INK, int(200 * fade)))
+        self.screen.blit(veil, (0, 0))
+        slam = max(1.0, 3.0 - t / 6)
+        size = int(110 * slam)
+        style.text(self.screen, v["text"], (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 30), size, v["color"],
+                   title=True, center=True, alpha=int(255 * fade))
+        if t > 18:
+            style.text(self.screen, f"{v['name']} " + ("did it." if v["text"] == "GUILTY" else "didn't do it."),
+                       (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 60), 28, style.PARCHMENT, center=True, alpha=int(255 * fade))
 
     def run(self):
         """Main game loop"""

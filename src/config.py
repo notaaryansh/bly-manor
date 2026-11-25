@@ -14,9 +14,13 @@ LIGHT_GRAY = (200, 200, 200)
 ACCENT_COLOR = (200, 50, 50)
 
 # Card dimensions
+# Board layout (8px grid). Menu column on the left margin, 3x2 card grid beside it.
+MARGIN = 48
+GRID_TOP = 144
+MENU_X, MENU_W = MARGIN, 240
 CARD_WIDTH = 280
-CARD_HEIGHT = 350
-CARD_PADDING = 30
+CARD_HEIGHT = 338          # 144 + 2*338 + 32 = 852 = 900 - MARGIN
+CARD_PADDING = 32
 CARDS_PER_ROW = 3
 
 # FPS

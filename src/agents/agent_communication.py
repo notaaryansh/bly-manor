@@ -7,6 +7,8 @@ import os
 import threading
 from dotenv import load_dotenv
 from openai import OpenAI
+from src.ui.fx import fx
+from src.ui import style
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -158,9 +160,12 @@ React to what they said naturally (1-2 sentences)."""
             print(f"   \"{agent1_share}\"")
             print(f"   {agent2_name}: \"{agent2_response}\"\n")
 
+            # Let the player know the rumor mill is turning
+            fx.post(fx.toast, f"{agent2_name} heard something from {agent1_name}...", style.ROSE)
+
             # Show visualization arrow if visualizer is available
             if self.visualizer:
-                self.visualizer.send_agent_communication(agent1_name, agent2_name, duration=120)
+                self.visualizer.send_agent_communication(agent1_name, agent2_name, duration=120, text=agent1_share)
 
             self._update_agent_from_conversation(agent2_name, agent1_share, agent1_name, rel_type)
 

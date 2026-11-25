@@ -1,8 +1,12 @@
 """
-Character card display component
+Suspect card on the main board: framed portrait that lifts on hover, gets a
+QUESTIONED stamp once you've talked to them, and turns red in accusation mode.
 """
+import math
 import pygame
 from src.config import *
+from src.ui import style, sound
+from src.ui.fx import ease_out_cubic
 
 
 class CharacterCard:
@@ -13,84 +17,72 @@ class CharacterCard:
         self.width = CARD_WIDTH
         self.height = CARD_HEIGHT
         self.is_hovered = False
-
-        # Load portrait
-        portrait_path = CHARACTER_PORTRAITS.get(
-            self.suspect["name"], "assets/potrait/PNG/Transperent/Icon1.png"
-        )
-        try:
-            self.portrait = pygame.image.load(portrait_path)
-            self.portrait = pygame.transform.scale(self.portrait, (150, 150))
-        except:
-            self.portrait = None
-
-        # Create fonts
-        self.name_font = pygame.font.Font(None, 28)
-        self.info_font = pygame.font.Font(None, 20)
+        self.lift = 0.0
+        self.frame = 0
+        self.visited = False
+        self.accuse_mode = False
+        self.portrait = style.portrait(suspect_data["name"], 192)
 
     def check_hover(self, mouse_pos):
-        """Check if mouse is hovering over this card"""
-        mouse_x, mouse_y = mouse_pos
-        self.is_hovered = (
-            self.x <= mouse_x <= self.x + self.width and self.y <= mouse_y <= self.y + self.height
-        )
+        was = self.is_hovered
+        self.is_hovered = self.rect().collidepoint(mouse_pos)
+        if self.is_hovered and not was:
+            sound.play("select")
+
+    def rect(self):
+        return pygame.Rect(self.x, self.y, self.width, self.height)
 
     def is_clicked(self, mouse_pos):
-        """Check if this card was clicked"""
-        mouse_x, mouse_y = mouse_pos
-        return (
-            self.x <= mouse_x <= self.x + self.width and self.y <= mouse_y <= self.y + self.height
-        )
+        return self.rect().collidepoint(mouse_pos)
 
     def draw(self, surface):
-        """Draw the character card"""
-        # Create semi-transparent background
-        card_surface = pygame.Surface((self.width, self.height))
-        card_surface.set_alpha(240 if not self.is_hovered else 255)
-        card_surface.fill((40, 40, 50))
+        self.frame += 1
+        self.lift += ((1.0 if self.is_hovered else 0.0) - self.lift) * 0.2
+        up = int(12 * ease_out_cubic(self.lift))
+        r = self.rect().move(0, -up)
 
-        # Draw card border - changes color on hover
-        border_color = (100, 150, 200) if self.is_hovered else (70, 70, 80)
-        pygame.draw.rect(card_surface, border_color, (0, 0, self.width, self.height), 3)
+        # drop shadow grows as the card lifts
+        shadow = pygame.Surface(r.size, pygame.SRCALPHA)
+        shadow.fill((*style.INK, 110 + int(60 * self.lift)))
+        surface.blit(shadow, r.move(6 + up // 3, 8 + up))
 
-        # Blit the card surface to the main surface
-        surface.blit(card_surface, (self.x, self.y))
+        fill = (52, 22, 30) if self.accuse_mode else style.NIGHT
+        style.nine_slice(surface, r, "assets/dialogue_box/20240707dragon9SlicesB.png", 24, 2, fill=fill)
 
-        # Draw portrait
-        if self.portrait:
-            portrait_x = self.x + (self.width - 150) // 2
-            portrait_y = self.y + 20
-            surface.blit(self.portrait, (portrait_x, portrait_y))
-        else:
-            # Draw placeholder if portrait not found
-            placeholder_rect = pygame.Rect(
-                self.x + (self.width - 150) // 2, self.y + 20, 150, 150
-            )
-            pygame.draw.rect(surface, DARK_GRAY, placeholder_rect)
-            pygame.draw.rect(surface, LIGHT_GRAY, placeholder_rect, 2)
+        # portrait window with a candle-warm backdrop
+        inset = 24
+        win = pygame.Rect(r.x + inset, r.y + inset, r.w - 2 * inset, 200)
+        pygame.draw.rect(surface, style.PLUM if not self.accuse_mode else (90, 30, 40), win)
+        glow = pygame.Surface(win.size, pygame.SRCALPHA)
+        pygame.draw.ellipse(glow, (*style.AMBER, 34), glow.get_rect().inflate(-30, -10))
+        surface.blit(glow, win)
+        bob = int(math.sin(self.frame * 0.08) * 2 * self.lift)
+        surface.blit(self.portrait, self.portrait.get_rect(midbottom=(win.centerx, win.bottom + bob)))
+        pygame.draw.rect(surface, style.DUSK, win, 2)
 
-        # Draw name
-        name_surface = self.name_font.render(self.suspect["name"], True, WHITE)
-        name_x = self.x + (self.width - name_surface.get_width()) // 2
-        name_y = self.y + 180
-        surface.blit(name_surface, (name_x, name_y))
+        name = self.suspect["name"].upper()
+        style.text_mid(surface, name, r.centerx, win.bottom + 28, 30, style.PARCHMENT, title=True, align="center")
+        style.text_mid(surface, f"{self.suspect['occupation']}  ·  {self.suspect['age']}",
+                       r.centerx, win.bottom + 58, 16, style.MIST, align="center")
 
-        # Draw age and occupation
-        info_text = f"{self.suspect['age']} years old"
-        info_surface = self.info_font.render(info_text, True, LIGHT_GRAY)
-        info_x = self.x + (self.width - info_surface.get_width()) // 2
-        info_y = self.y + 220
-        surface.blit(info_surface, (info_x, info_y))
+        if self.is_hovered:
+            pulse = 0.5 + 0.5 * math.sin(self.frame * 0.2)
+            col = style.EMBER if self.accuse_mode else style.AMBER
+            c = tuple(int(v * (0.7 + 0.3 * pulse)) for v in col)
+            L, t = 26, 4
+            for (cx, cy, sx, sy) in ((r.x + 6, r.y + 6, 1, 1), (r.right - 6, r.y + 6, -1, 1),
+                                     (r.x + 6, r.bottom - 6, 1, -1), (r.right - 6, r.bottom - 6, -1, -1)):
+                pygame.draw.rect(surface, c, (min(cx, cx + sx * L), cy - (t if sy < 0 else 0), L, t))
+                pygame.draw.rect(surface, c, (cx - (t if sx < 0 else 0), min(cy, cy + sy * L), t, L))
+            label = "ACCUSE?" if self.accuse_mode else "QUESTION"
+            style.text_mid(surface, label, r.centerx, r.bottom - 32, 14, c, align="center")
 
-        occupation_surface = self.info_font.render(
-            self.suspect["occupation"], True, LIGHT_GRAY
-        )
-        occupation_x = self.x + (self.width - occupation_surface.get_width()) // 2
-        occupation_y = self.y + 245
-        surface.blit(occupation_surface, (occupation_x, occupation_y))
-
-        # Draw gender
-        gender_surface = self.info_font.render(self.suspect["gender"], True, (150, 150, 160))
-        gender_x = self.x + (self.width - gender_surface.get_width()) // 2
-        gender_y = self.y + 270
-        surface.blit(gender_surface, (gender_x, gender_y))
+        if self.visited:
+            # rubber stamp across the bottom-right of the portrait window
+            stamp = style.font(16, title=True).render("QUESTIONED", False, style.BLOOD)
+            box = pygame.Surface((stamp.get_width() + 20, stamp.get_height() + 12), pygame.SRCALPHA)
+            box.fill((*style.PARCHMENT, 225))
+            pygame.draw.rect(box, style.BLOOD, box.get_rect(), 3)
+            box.blit(stamp, (10, 6))
+            box = pygame.transform.rotate(box, 10)
+            surface.blit(box, box.get_rect(center=(win.right - 64, win.bottom - 26)))
