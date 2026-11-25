@@ -127,19 +127,21 @@ class FX:
             f.draw(surface)
         prev_clip = surface.get_clip()
         surface.set_clip(pygame.Rect(0, 0, area_width, surface.get_height()))
-        y = 18
-        for t in self.toasts:
+        # toasts stack upward from the bottom-right margin, the board's empty corner
+        margin, h, gap = 48, 48, 8
+        bottom = surface.get_height() - margin
+        for i, t in enumerate(reversed(self.toasts)):
             slide = ease_out_back(min(1, t.age / 18))
             out = 1 - ease_in_out(max(0, (t.age - t.life + 30) / 30))
             msg_w = style.font(18).size(t.msg)[0] + 64
-            x = area_width - int(msg_w * slide * out) - 16 * out
-            rect = pygame.Rect(int(x), y, msg_w, 48)
+            right = area_width - margin
+            x = right - msg_w + int((1 - slide * out) * (msg_w + margin))
+            rect = pygame.Rect(x, bottom - h - i * (h + gap), msg_w, h)
             style.nine_slice(surface, rect, "assets/dialogue_box/20240707dragon9SlicesD.png", 12, 2, fill=style.NIGHT)
             pygame.draw.circle(surface, t.color, (rect.x + 26, rect.centery), 7)
             if (t.age // 10) % 2 == 0 and t.age < 90:
                 pygame.draw.circle(surface, style.PARCHMENT, (rect.x + 26, rect.centery), 7, 2)
-            style.text(surface, t.msg, (rect.x + 44, rect.y + 13), 18, style.PARCHMENT)
-            y += 56
+            style.text_mid(surface, t.msg, rect.x + 44, rect.centery, 18, style.PARCHMENT)
         surface.set_clip(prev_clip)
 
 
