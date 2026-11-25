@@ -57,6 +57,10 @@ def shake_for(deltas):
     return min(1.0, 0.18 * bad + (0.25 if bad >= 2 else 0))
 
 
+_VEIN_SMALL = ("..X.X..", "..X.X..", "XX...XX", ".......", "XX...XX", "..X.X..", "..X.X..")
+_VEIN_BIG = ("...X.X...", "...X.X...", "...X.X...", "XXX...XXX", ".........",
+             "XXX...XXX", "...X.X...", "...X.X...", "...X.X...")
+
 _TINTS = {
     NERVOUS: ((150, 190, 255), pygame.BLEND_RGB_MULT),
     IRRITATED: ((255, 190, 170), pygame.BLEND_RGB_MULT),
@@ -191,15 +195,20 @@ class SuspectSprite:
                     e(6 - i, 12 + i * 4, 2, 1, style.FROST)
                     e(58 + i, 12 + i * 4, 2, 1, style.FROST)
         elif emo == IRRITATED:
-            # throbbing anger vein, top right
-            grow = 1 if (frame // 9) % 2 else 0
-            cx, cy = 52 - grow, 4 - grow
-            c = (240, 70, 60)
-            arm = 3 + grow
-            e(cx, cy, arm, 1, c); e(cx, cy, 1, arm, c)
-            e(cx + arm + 2, cy, arm, 1, c); e(cx + 2 * arm + 1, cy, 1, arm, c)
-            e(cx, cy + arm + 2, 1, arm, c); e(cx, cy + 2 * arm + 1, arm, 1, c)
-            e(cx + 2 * arm + 1, cy + arm + 2, 1, arm, c); e(cx + arm + 2, cy + 2 * arm + 1, arm, 1, c)
+            # throbbing anger vein (classic four-corner mark), pulsing in size
+            mark = _VEIN_BIG if (frame // 9) % 2 else _VEIN_SMALL
+            cell = max(2, round(rect.w / 64 * 1.5))
+            n = len(mark)
+            ox, oy = self._p(rect, 55, 5)
+            ox -= n * cell // 2
+            oy -= n * cell // 2
+            for pass_, col in ((0, style.INK), (1, (240, 70, 60))):
+                grow = cell // 3 if pass_ == 0 else 0
+                for ry, row in enumerate(mark):
+                    for rx, ch in enumerate(row):
+                        if ch == "X":
+                            pygame.draw.rect(surface, col, (ox + rx * cell - grow, oy + ry * cell - grow,
+                                                            cell + 2 * grow, cell + 2 * grow))
         elif emo == GUARDED:
             # gloom curtain over the brow + trailing dots
             for i in range(6):
