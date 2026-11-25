@@ -18,6 +18,7 @@ from src.gui import (
 from src.agents import MurderMysteryMaster, SuspectAgent, AgentOrchestrator, AgentCommunicationManager
 from src.utils import init_cursors, set_default_cursor, set_map_frame_cursor, ParallaxBackground
 from src.visualization import AgentBehaviorVisualizer
+from src.ui.fx import fx
 
 
 def get_card_positions():
@@ -52,7 +53,9 @@ class MurderMysteryGame:
             screen_height = SCREEN_HEIGHT
 
         # Create screen
-        self.screen = pygame.display.set_mode((screen_width, screen_height))
+        self.display = pygame.display.set_mode((screen_width, screen_height))
+        # Everything draws to this canvas; fx.present() adds shake and zoom when showing it
+        self.screen = pygame.Surface((screen_width, screen_height))
         pygame.display.set_caption("Murder Mystery - The Mansion")
 
         # Clock for FPS
@@ -358,12 +361,7 @@ class MurderMysteryGame:
                         self.accusation_modal.toggle()
                     # Handle conversation screen
                     elif self.active_conversation:
-                        window_rect = self.conversation_screens[
-                            self.active_conversation
-                        ].get_window_rect()
-                        if not window_rect.collidepoint(mouse_pos):
-                            self.conversation_screens[self.active_conversation].toggle()
-                            self.active_conversation = None
+                        self.conversation_screens[self.active_conversation].handle_click(mouse_pos)
                     # Handle character card clicks
                     else:
                         for i, card in enumerate(self.cards):
@@ -405,6 +403,7 @@ class MurderMysteryGame:
     def update(self):
         """Update game state"""
         self.background.update()
+        fx.update()
 
         # Update visualization if enabled
         if self.visualize_mode and self.visualizer:
@@ -415,6 +414,15 @@ class MurderMysteryGame:
         # If game hasn't started, show title screen
         if not self.game_started:
             self._draw_title_screen()
+            self._present()
+            return
+
+        if self.active_conversation:
+            # The interrogation scene fills the game area
+            self.conversation_screens[self.active_conversation].draw(self.screen)
+            if self.visualize_mode and self.visualizer:
+                self.visualizer.draw(self.screen)
+            self._present()
             return
 
         # Draw background
@@ -449,7 +457,12 @@ class MurderMysteryGame:
         if self.visualize_mode and self.visualizer:
             self.visualizer.draw(self.screen)
 
-        # Update display
+        self._present()
+
+    def _present(self):
+        """Overlay fx, then show the canvas with screen shake / zoom punch."""
+        fx.draw_overlay(self.screen, SCREEN_WIDTH)
+        fx.present(self.display, self.screen)
         pygame.display.flip()
 
     def _draw_title_screen(self):
@@ -485,9 +498,7 @@ class MurderMysteryGame:
         continue_y = title_y + title_text.get_height() + 150
         self.screen.blit(continue_text, (continue_x, continue_y))
 
-        # Update display
-        pygame.display.flip()
-
+        
     def run(self):
         """Main game loop"""
         print("🔍 " * 20)
