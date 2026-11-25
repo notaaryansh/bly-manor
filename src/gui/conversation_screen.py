@@ -1,481 +1,364 @@
 """
-Conversation screen for interviewing suspects
+Interrogation scene, played like a visual novel: the suspect stands in their
+room, lines type out with voice blips, and their expression, the screen and
+the sound react to every swing in their mood.
 """
-import pygame
 import threading
-import os
+import pygame
 from src.config import *
+from src.ui import style, sound
+from src.ui.fx import fx, ease_out_back, ease_out_cubic
+from src.ui.emotion import SuspectSprite, LABELS, choose, shake_for, SHOCKED, IRRITATED, NERVOUS
+from src.ui.scene import Room
+
+TEXTBOX = pygame.Rect(56, 628, 1288, 252)
+TEXT_SIZE = 24
+TYPE_SPEED = 1.6            # characters per frame
+MOOD_LABELS = (("Anxious", "Nerves", style.FROST), ("Moody", "Temper", style.EMBER), ("Trust", "Trust", style.MOSS))
 
 
 class ConversationScreen:
     def __init__(self, suspect_data, agent, screen_width, screen_height, logs_modal=None, visualizer=None, chaos_callback=None):
         self.suspect = suspect_data
+        self.name = suspect_data["name"]
         self.agent = agent
         self.is_open = False
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.logs_modal = logs_modal
         self.visualizer = visualizer
-        self.chaos_callback = chaos_callback  # Callback for chaos mode agent communications
-        self.last_question = None  # Track the last question asked
-        self.last_response = None  # Track the last response received
+        self.chaos_callback = chaos_callback
+        self.last_question = None
+        self.last_response = None
 
-        # Conversation history
+        # conversation state (messages is read by the logs modal)
         self.messages = []
         self.user_input = ""
-        self.is_typing = False
-
-        # Loading animation
         self.is_loading = False
-        self.loading_dots_frame = 0
-        self.loading_timer = 0
         self.loading_message = None
         self.pending_response = None
-
-        # Cache for opening statement
         self.opening_statement = None
-
-        # Cache for responses (question -> response mapping)
         self.response_cache = {}
-
-        # Track if conversation has been started
         self.conversation_started = False
+        self.session_snippets = []
+        self.scroll_offset = 0
 
-        # Track conversation sessions for multiple observations
-        self.session_snippets = []  # List of snippets from different conversation sessions
-
-        # Track personality changes for animation
+        # presentation
+        self.room = Room(self.name)
+        self.sprite = SuspectSprite(self.name, 448)
+        self.frame = 0
+        self.opened_at = 0
+        self.line = None            # {"speaker", "text", "shown"}
+        self.backlog_open = False
         self.last_personality_state = agent.get_personality_state().copy()
-        self.personality_changes = {}  # Maps trait -> (change_value, frame_count)
-        self.change_animation_frames = 180  # 180 frames = 3 seconds at 60 FPS
+        self.shown_levels = dict(self.last_personality_state)
+        self.row_flash = {}
+        case = getattr(agent, "case_state", None) or {}
+        self.time_text = str(case.get("time_of_death", "")).split("(")[0].strip()
+        self.sprite.set_emotion(choose(self.last_personality_state))
 
-        # Scroll tracking for conversation
-        self.scroll_offset = 0  # How many messages to skip from the top
-
-        # Fonts
-        self.title_font = pygame.font.Font(None, 36)
-        self.text_font = pygame.font.Font(None, 18)
-        self.input_font = pygame.font.Font(None, 20)
-
-        # Load portrait
-        portrait_path = CHARACTER_PORTRAITS.get(suspect_data["name"])
-        if portrait_path and os.path.exists(portrait_path):
-            self.portrait = pygame.image.load(portrait_path)
-            self.portrait = pygame.transform.scale(self.portrait, (150, 150))
-        else:
-            self.portrait = None
-
-        # Load progress bar image
-        progress_bar_path = "assets/progress/PNG/GUI-Kit-Pack-Free_04.png"
-        if os.path.exists(progress_bar_path):
-            self.progress_bar = pygame.image.load(progress_bar_path)
-            self.progress_bar = pygame.transform.scale(self.progress_bar, (15, 20))
-        else:
-            self.progress_bar = None
-
-        # Load level 0 icon (slim version)
-        level_zero_icon_path = "assets/progress/PNG/GUI-Kit-Pack-Free_01.png"
-        if os.path.exists(level_zero_icon_path):
-            self.level_zero_icon = pygame.image.load(level_zero_icon_path)
-            self.level_zero_icon = pygame.transform.scale(self.level_zero_icon, (6, 20))
-        else:
-            self.level_zero_icon = None
-
+    # ------------------------------------------------------------ lifecycle
     def toggle(self):
-        """Toggle the conversation screen open/closed"""
         self.is_open = not self.is_open
-        if self.is_open and not self.conversation_started:
-            self.conversation_started = True
-            # Fetch opening statement asynchronously
-            thread = threading.Thread(target=self._fetch_opening_statement)
-            thread.daemon = True
-            thread.start()
+        if self.is_open:
+            self.opened_at = self.frame
+            self.backlog_open = False
+            sound.play("open")
+            if not self.conversation_started:
+                self.conversation_started = True
+                self.sprite.thinking = True
+                threading.Thread(target=self._fetch_opening_statement, daemon=True).start()
+
+    def get_window_rect(self):
+        return pygame.Rect(0, 0, self.screen_width, self.screen_height)
 
     def _fetch_opening_statement(self):
-        """Fetch opening statement from the agent"""
         try:
             statement = self.agent.get_opening_statement()
             self.opening_statement = statement
             if statement:
-                self.messages.append((self.suspect["name"], statement))
-
-                # Send interaction to visualizer
+                self.messages.append((self.name, statement))
+                self._say(self.name, statement)
                 if self.visualizer:
-                    self.visualizer.send_interaction(self.suspect["name"], duration=180)
-
-                # Generate snippet for logs
+                    self.visualizer.send_interaction(self.name, duration=180)
                 if self.logs_modal:
-                    thread = threading.Thread(
-                        target=self.logs_modal.generate_snippet_for_suspect,
-                        args=(self.suspect["name"], self),
-                    )
-                    thread.daemon = True
-                    thread.start()
+                    threading.Thread(target=self.logs_modal.generate_snippet_for_suspect,
+                                     args=(self.name, self), daemon=True).start()
         except Exception as e:
             print(f"Error getting opening statement: {e}")
-
-    def handle_input(self, event):
-        """Handle keyboard input and scroll for conversation"""
-        if not self.is_open:
-            return
-
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_RETURN:
-                # Send message
-                if self.user_input.strip() and not self.is_loading:
-                    self.messages.append(("You", self.user_input))
-                    self.loading_message = self.user_input
-                    self.last_question = self.user_input  # Track for chaos mode
-                    self.user_input = ""
-                    self.is_loading = True
-                    self.loading_timer = 0
-                    self.loading_dots_frame = 0
-                    # Reset scroll to bottom when new message sent
-                    self.scroll_offset = 0
-
-                    # Start API call in background thread
-                    thread = threading.Thread(target=self._fetch_response_async)
-                    thread.daemon = True
-                    thread.start()
-            elif event.key == pygame.K_BACKSPACE:
-                self.user_input = self.user_input[:-1]
-            elif event.key == pygame.K_ESCAPE:
-                # Trigger chaos mode callback if enabled and conversation had exchanges
-                if self.chaos_callback and self.last_question and self.last_response:
-                    self.chaos_callback(self.suspect["name"], self.last_question, self.last_response)
-                self.is_open = False
-        elif event.type == pygame.TEXTINPUT:
-            if len(self.user_input) < 100 and not self.is_loading:  # Limit input length
-                self.user_input += event.text
-        elif event.type == pygame.MOUSEWHEEL:
-            # Handle scroll wheel - scroll up to see older messages
-            self.scroll_offset += event.y  # Positive y = scroll up (show older), negative = scroll down (show newer)
-            max_scroll = len(self.messages) - 1
-            self.scroll_offset = max(0, min(self.scroll_offset, max_scroll))
+        finally:
+            self.sprite.thinking = False
 
     def _fetch_response_async(self):
-        """Fetch response from agent in background thread"""
         try:
-            # Check if response is cached
             if self.loading_message in self.response_cache:
                 self.pending_response = self.response_cache[self.loading_message]
             else:
-                # Get response from agent and cache it
-                response, personality_changes = self.agent.respond(self.loading_message)
+                response, _ = self.agent.respond(self.loading_message)
                 self.pending_response = response
                 self.response_cache[self.loading_message] = response
-
-                # Send conversation trace to visualizer
                 if self.visualizer:
-                    self.visualizer.send_interaction(self.suspect["name"], duration=180)
-
-                # Record response to orchestrator for feedback loop
+                    self.visualizer.send_interaction(self.name, duration=180)
                 if self.agent.orchestrator:
-                    current_personality = self.agent.get_personality_state()
                     self.agent.orchestrator.record_suspect_response(
-                        self.suspect["name"],
-                        self.loading_message,
-                        response,
-                        current_personality
-                    )
-
+                        self.name, self.loading_message, response, self.agent.get_personality_state())
         except Exception as e:
-            self.pending_response = f"Error getting response: {str(e)}"
+            self.pending_response = f"...I don't want to talk right now. ({e.__class__.__name__})"
         finally:
             self.is_loading = False
 
-    def get_window_rect(self):
-        """Get the rectangle of the conversation window"""
-        window_width = int(self.screen_width * 0.85)
-        window_height = int(self.screen_height * 0.90)
-        window_x = (self.screen_width - window_width) // 2
-        window_y = (self.screen_height - window_height) // 2
-        return pygame.Rect(window_x, window_y, window_width, window_height)
+    def _say(self, speaker, text):
+        self.line = {"speaker": speaker, "text": text, "shown": 0.0}
 
-    def draw(self, surface):
-        """Draw the conversation screen"""
+    # ------------------------------------------------------------ input
+    def _line_done(self):
+        return self.line is None or self.line["shown"] >= len(self.line["text"])
+
+    def handle_click(self, pos=None):
+        """Clicking finishes the line that is typing out."""
+        if self.line and not self._line_done():
+            self.line["shown"] = len(self.line["text"])
+
+    def handle_input(self, event):
         if not self.is_open:
             return
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_TAB:
+                self.backlog_open = not self.backlog_open
+                self.scroll_offset = 0
+                sound.play("select")
+            elif event.key == pygame.K_RETURN:
+                if not self._line_done():
+                    self.handle_click()
+                elif self.user_input.strip() and not self.is_loading and not self.sprite.thinking:
+                    self._ask(self.user_input.strip())
+            elif event.key == pygame.K_BACKSPACE:
+                self.user_input = self.user_input[:-1]
+            elif event.key == pygame.K_ESCAPE:
+                if self.backlog_open:
+                    self.backlog_open = False
+                    return
+                if self.chaos_callback and self.last_question and self.last_response:
+                    self.chaos_callback(self.name, self.last_question, self.last_response)
+                self.is_open = False
+        elif event.type == pygame.TEXTINPUT:
+            if len(self.user_input) < 120 and not self.is_loading and not self.backlog_open:
+                self.user_input += event.text
+        elif event.type == pygame.MOUSEWHEEL and self.backlog_open:
+            self.scroll_offset = max(0, self.scroll_offset + event.y)
 
-        # Draw semi-transparent background
-        overlay = pygame.Surface((self.screen_width, self.screen_height))
-        overlay.set_alpha(50)
-        overlay.fill((0, 0, 0))
-        surface.blit(overlay, (0, 0))
+    def _ask(self, question):
+        self.messages.append(("You", question))
+        self.loading_message = question
+        self.last_question = question
+        self.user_input = ""
+        self.is_loading = True
+        self.sprite.thinking = True
+        self._say("You", question)
+        self.line["shown"] = len(question)
+        sound.play("select")
+        threading.Thread(target=self._fetch_response_async, daemon=True).start()
 
-        # Draw main conversation window
-        window_width = int(self.screen_width * 0.85)
-        window_height = int(self.screen_height * 0.90)
-        window_x = (self.screen_width - window_width) // 2
-        window_y = (self.screen_height - window_height) // 2
+    # ------------------------------------------------------------ reactions
+    def _receive(self):
+        """A response arrived: react to the mood swing, then start typing it."""
+        response = self.pending_response
+        self.pending_response = None
+        self.sprite.thinking = False
+        self.messages.append((self.name, response))
+        self.last_response = response
 
-        # Draw window background
-        pygame.draw.rect(surface, DARK_GRAY, (window_x, window_y, window_width, window_height))
-        pygame.draw.rect(surface, ACCENT_COLOR, (window_x, window_y, window_width, window_height), 3)
+        current = self.agent.get_personality_state()
+        deltas = {}
+        for trait, new in current.items():
+            change = new - self.last_personality_state.get(trait, new)
+            if change:
+                deltas[trait] = change
+            self.last_personality_state[trait] = new
 
-        # Draw suspect info section (left side)
-        info_width = 250
-        info_x = window_x + 20
-        info_y = window_y + 20
+        emotion = choose(current, deltas, response)
+        self.sprite.set_emotion(emotion)
+        amount = shake_for(deltas)
+        if emotion == SHOCKED:
+            amount = max(amount, 0.55)
+            fx.zoom_punch(0.03)
+            sound.play("sting")
+        if amount > 0:
+            fx.shake(amount)
+            if amount >= 0.3:
+                sound.play("thud")
+                fx.flash(style.EMBER if emotion == IRRITATED else style.FROST if emotion == NERVOUS else style.PARCHMENT,
+                         60 + int(80 * amount))
 
-        # Draw portrait
-        if self.portrait:
-            portrait_x = info_x + (info_width - 150) // 2
-            portrait_y = info_y
-            surface.blit(self.portrait, (portrait_x, portrait_y))
+        for i, (trait, label, color) in enumerate(MOOD_LABELS):
+            d = deltas.get(trait)
+            if d:
+                good = (d > 0) == (trait == "Trust")
+                self.row_flash[trait] = 50
+                fx.float_text(f"{d:+.0f} {label}", (1210, 182 + i * 46), style.MOSS if good else style.EMBER, 22)
 
-        # Draw suspect name and info
-        name_text = self.title_font.render(self.suspect["name"], True, WHITE)
-        name_x = info_x + (info_width - name_text.get_width()) // 2
-        name_y = info_y + 170
-        surface.blit(name_text, (name_x, name_y))
+        if deltas and self.visualizer:
+            self.visualizer.send_personality_update(self.name, current)
+            self.visualizer.send_feedback_to_orchestrator(self.name)
+        if self.logs_modal:
+            threading.Thread(target=self.logs_modal.generate_snippet_for_suspect,
+                             args=(self.name, self), daemon=True).start()
+        self._say(self.name, response)
 
-        # Draw personality traits
-        personality_y = name_y + 40
-        traits_title = self.text_font.render("Personality Traits:", True, LIGHT_GRAY)
-        surface.blit(traits_title, (info_x, personality_y))
-
-        personality_y += 25
-        for trait, level in self.agent.get_personality_state().items():
-            # Draw trait name
-            trait_text = self.text_font.render(f"{trait}:", True, LIGHT_GRAY)
-            surface.blit(trait_text, (info_x, personality_y))
-
-            # Draw visual progress bars (level number of bars) or icon for level 0
-            bar_x = info_x + 140
-
-            # Convert level to int for drawing
-            level_int = int(level)
-
-            # Check if this trait is animating and update animation timer
-            change_value = None
-            is_animating = trait in self.personality_changes
-            should_blink = False
-
-            if is_animating:
-                change_value, frames_left = self.personality_changes[trait]
-                # Decrement the animation timer
-                self.personality_changes[trait] = (change_value, frames_left - 1)
-                # Blinking effect - blink every 20 frames (10 visible, 10 invisible)
-                should_blink = (frames_left % 20) < 10
-                if frames_left <= 1:  # Remove when timer reaches 0
-                    del self.personality_changes[trait]
-
-            # Always draw the current bars with the updated level
-            if level_int == 0:
-                # Draw level 0 icon (slim)
-                if self.level_zero_icon and (not is_animating or should_blink):
-                    surface.blit(self.level_zero_icon, (bar_x, personality_y))
-            else:
-                # Draw visual progress bars (level number of bars)
-                for i in range(level_int):
-                    # Only blink the new bar (the last one added)
-                    bar_index = i
-                    is_new_bar = (bar_index == level_int - 1 and change_value is not None and change_value > 0)
-
-                    # Don't draw new bars when blinking is in hidden phase
-                    if is_new_bar and is_animating and not should_blink:
-                        continue
-
-                    if self.progress_bar:
-                        surface.blit(self.progress_bar, (bar_x + i * 18, personality_y))
-
-            # Draw +1 or -1 indicator if animating
-            if is_animating and change_value is not None:
-                change_text = f"{change_value:+.1f}"  # Show as decimal
-
-                # Color logic: Trust +1 is good (green), others +1 is bad (red)
-                if trait == "Trust":
-                    change_color = (100, 255, 100) if change_value > 0 else (255, 100, 100)
-                else:  # Anxious and Moody: +1 is bad (red), -1 is good (green)
-                    change_color = (255, 100, 100) if change_value > 0 else (100, 255, 100)
-
-                indicator_surface = self.text_font.render(change_text, True, change_color)
-                indicator_x = bar_x + (level_int * 18) + 5
-                surface.blit(indicator_surface, (indicator_x, personality_y - 5))
-
-            personality_y += 25
-
-        # Draw conversation section (right side)
-        conv_x = window_x + info_width + 40
-        conv_y = window_y + 20
-        conv_width = window_width - info_width - 60
-        conv_height = window_height - 120
-
-        # Draw conversation box background
-        pygame.draw.rect(surface, (40, 40, 40), (conv_x, conv_y, conv_width, conv_height))
-        pygame.draw.rect(surface, LIGHT_GRAY, (conv_x, conv_y, conv_width, conv_height), 2)
-
-        # Draw messages as bubbles with scroll support
-        message_y = conv_y + 10
-        max_visible_messages = 10
-        # Calculate which messages to show based on scroll offset
-        start_index = max(0, len(self.messages) - max_visible_messages - self.scroll_offset)
-        messages_to_show = self.messages[start_index:start_index + max_visible_messages]
-
-        # Add pending response if available
+    # ------------------------------------------------------------ drawing
+    def draw(self, surface):
+        if not self.is_open:
+            return
+        self.frame += 1
         if self.pending_response:
-            self.messages.append((self.suspect["name"], self.pending_response))
+            self._receive()
+        self.sprite.update()
+        for k in list(self.row_flash):
+            self.row_flash[k] -= 1
+            if self.row_flash[k] <= 0:
+                del self.row_flash[k]
 
-            # Track the last response for chaos mode
-            self.last_response = self.pending_response
+        # type the current line out, with blips
+        if self.line and not self._line_done():
+            before = int(self.line["shown"])
+            self.line["shown"] = min(len(self.line["text"]), self.line["shown"] + TYPE_SPEED)
+            after = int(self.line["shown"])
+            if after // 2 != before // 2 and self.line["text"][after - 1:after].strip():
+                sound.play("blip", self.line["speaker"])
 
-            self.pending_response = None
-            messages_to_show = self.messages[-max_visible_messages:]
+        t_open = self.frame - self.opened_at
+        enter = ease_out_cubic(min(1, t_open / 24))
 
-            # Detect personality changes and track them for animation
-            current_state = self.agent.get_personality_state()
-            personality_updated = False
-            for trait, new_level in current_state.items():
-                old_level = self.last_personality_state.get(trait, new_level)
-                change = new_level - old_level
-                if change != 0:
-                    self.personality_changes[trait] = (change, self.change_animation_frames)
-                    personality_updated = True
-                self.last_personality_state[trait] = new_level
+        self.room.draw(surface, self.frame)
+        surface.blit(style.vignette(surface.get_size()), (0, 0))
 
-            # Send personality update to visualizer
-            if personality_updated and self.visualizer:
-                self.visualizer.send_personality_update(self.suspect["name"], current_state)
-                # Also show feedback loop to orchestrator
-                self.visualizer.send_feedback_to_orchestrator(self.suspect["name"])  # Default 180 frames = 3 seconds
+        speaking_player = self.line is not None and self.line["speaker"] == "You"
+        self.sprite.draw(surface, (470, TEXTBOX.y + 18), self.frame,
+                         dim=0.45 if speaking_player else 0.0, enter=enter)
 
-            # Generate snippet for logs in background thread
-            if self.logs_modal:
-                thread = threading.Thread(
-                    target=self.logs_modal.generate_snippet_for_suspect,
-                    args=(self.suspect["name"], self)
-                )
-                thread.daemon = True
-                thread.start()
+        self._draw_location(surface, t_open)
+        self._draw_demeanor(surface, enter)
+        self._draw_textbox(surface, enter)
+        if self.backlog_open:
+            self._draw_backlog(surface)
 
-        for speaker, message in messages_to_show:
-            is_player = speaker == "You"
+        if t_open < 16:  # fade in from black
+            veil = pygame.Surface(surface.get_size())
+            veil.fill(style.INK)
+            veil.set_alpha(int(255 * (1 - t_open / 16)))
+            surface.blit(veil, (0, 0))
 
-            # Determine bubble position and color first
-            if is_player:
-                # Player message - right side, blue
-                bubble_color = (100, 150, 255)
-                text_color = BLACK
-                left_margin = 100  # Player messages on right, so large left margin
-                right_margin = 5  # Minimal right padding for player messages
-            else:
-                # Suspect message - left side, gray with padding on right
-                bubble_color = (80, 80, 80)
-                text_color = WHITE
-                left_margin = 20
-                right_margin = 100  # Received messages have padding on right
+    def _draw_location(self, surface, t_open):
+        slide = ease_out_back(min(1, max(0, t_open - 6) / 22))
+        x = int(-420 + 460 * slide)
+        style.text(surface, self.room.title.upper(), (x, 28), 40, style.PARCHMENT, title=True)
+        if self.time_text:
+            style.text(surface, f"Night of the murder  ·  {self.time_text}", (x + 2, 78), 18, style.MIST)
 
-            # Wrap text based on actual rendered width with dynamic bubble width
-            bubble_padding = 10
-            line_height = 20
-            max_bubble_width = conv_width - left_margin - right_margin
-            min_bubble_width = 100  # Minimum width for bubble
+    def _draw_demeanor(self, surface, enter):
+        panel = pygame.Rect(0, 0, 360, 214)
+        panel.topright = (1344 + int((1 - enter) * 400), 124)
+        style.nine_slice(surface, panel, "assets/dialogue_box/20240707dragon9SlicesB.png", 24, 2, fill=style.NIGHT)
+        style.text(surface, "DEMEANOR", (panel.x + 34, panel.y + 24), 16, style.AMBER)
+        levels = self.agent.get_personality_state()
+        for i, (trait, label, color) in enumerate(MOOD_LABELS):
+            target = levels.get(trait, 0)
+            cur = self.shown_levels.get(trait, target)
+            cur += (target - cur) * 0.12
+            self.shown_levels[trait] = cur
+            y = panel.y + 58 + i * 46
+            flashing = trait in self.row_flash and (self.row_flash[trait] // 5) % 2 == 0
+            style.text(surface, label, (panel.x + 34, y + 2), 20, style.PARCHMENT if flashing else style.MIST)
+            for p in range(5):
+                r = pygame.Rect(panel.x + 150 + p * 34, y, 26, 22)
+                fill = max(0.0, min(1.0, cur - p))
+                pygame.draw.rect(surface, style.INK, r)
+                if fill > 0:
+                    pygame.draw.rect(surface, color, (r.x, r.y, int(r.w * fill), r.h))
+                    pygame.draw.rect(surface, tuple(min(255, c + 60) for c in color), (r.x, r.y, int(r.w * fill), 4))
+                pygame.draw.rect(surface, style.PARCHMENT if flashing else style.DUSK, r, 2)
 
-            # First pass: try to fit text with max width
-            words = message.split()
-            lines = []
-            current_line = ""
-            max_line_width = 0
+        label, color = LABELS[SHOCKED if self.sprite.shock_timer else self.sprite.emotion]
+        chip = pygame.Rect(0, 0, 220, 40)
+        chip.topright = (panel.right - 10, panel.bottom + 10)
+        pygame.draw.rect(surface, style.NIGHT, chip, border_radius=4)
+        pygame.draw.rect(surface, color, chip, 2, border_radius=4)
+        pygame.draw.circle(surface, color, (chip.x + 22, chip.centery), 7)
+        style.text(surface, label, (chip.x + 40, chip.y + 10), 18, color)
 
-            for word in words:
-                test_line = current_line + word + " " if current_line else word + " "
-                test_surface = self.text_font.render(test_line.rstrip(), True, text_color)
-                if test_surface.get_width() > max_bubble_width - (bubble_padding * 2) and current_line:
-                    line_surface = self.text_font.render(current_line.rstrip(), True, text_color)
-                    max_line_width = max(max_line_width, line_surface.get_width())
-                    lines.append(current_line.rstrip())
-                    current_line = word + " "
-                else:
-                    current_line = test_line
+    def _draw_textbox(self, surface, enter):
+        box = TEXTBOX.move(0, int((1 - enter) * 300))
+        style.nine_slice(surface, box, "assets/dialogue_box/20240707dragon9SlicesB.png", 24, 2, fill=style.NIGHT, fill_alpha=240)
 
-            if current_line:
-                line_surface = self.text_font.render(current_line.rstrip(), True, text_color)
-                max_line_width = max(max_line_width, line_surface.get_width())
-                lines.append(current_line.rstrip())
+        speaker = self.line["speaker"] if self.line else self.name
+        is_player = speaker == "You"
+        plate_img = style.image("assets/dialogue_box/20240707dragonHeaderB.png" if is_player
+                                else "assets/dialogue_box/20240707dragonHeaderA.png", 3)
+        plate_y = box.y - 32
+        if plate_img:
+            surface.blit(plate_img, (box.x + 30, plate_y))
+            style.text(surface, "DETECTIVE" if is_player else speaker.upper(),
+                       (box.x + 30 + plate_img.get_width() // 2, plate_y + plate_img.get_height() // 2 - 2),
+                       26, style.PARCHMENT, title=True, center=True)
+        if not is_player:
+            occ = self.suspect.get("occupation", "")
+            style.text(surface, occ, (box.x + 30 + plate_img.get_width() + 16, plate_y + 34), 18, style.MIST)
 
-            # Calculate dynamic bubble width based on content (tight fit)
-            dynamic_width = max_line_width + (bubble_padding * 2)
-            # Don't enforce min_bubble_width for dynamic sizing - let it fit content
-            bubble_width = min(dynamic_width, max_bubble_width)
+        hint = "ENTER ask   ·   TAB notes   ·   ESC leave"
+        hw = style.font(14).size(hint)[0]
+        style.text(surface, hint, (box.right - hw - 40, box.y + 28), 14, style.DUSK, shadow=False)
 
-            # Calculate bubble size
-            bubble_height = len(lines) * line_height + bubble_padding * 2
+        # current line
+        tx, ty = box.x + 48, box.y + 56
+        if self.line:
+            shown = self.line["text"][: int(self.line["shown"])]
+            color = (200, 215, 255) if is_player else style.PARCHMENT
+            lines = style.wrap(shown, TEXT_SIZE, box.w - 120)
+            for i, ln in enumerate(lines[:4]):
+                style.text(surface, ln, (tx, ty + i * 34), TEXT_SIZE, color)
+            if self._line_done() and not self.sprite.thinking and not is_player:
+                bob = 4 if (self.frame // 14) % 2 else 0
+                ax, ay = box.right - 62, box.y + 168 + bob
+                pygame.draw.polygon(surface, style.AMBER, [(ax, ay), (ax + 18, ay), (ax + 9, ay + 12)])
+        elif self.sprite.thinking:
+            style.text(surface, "...", (tx, ty), TEXT_SIZE, style.MIST)
 
-            # Determine bubble x position
-            if is_player:
-                # Player messages on right side - close to the right edge
-                bubble_x = conv_x + conv_width - bubble_width - 20
-            else:
-                # Suspect messages on left side
-                bubble_x = conv_x + left_margin
-
-            # Draw bubble background
-            pygame.draw.rect(surface, bubble_color, (bubble_x, message_y, bubble_width, bubble_height), border_radius=10)
-            pygame.draw.rect(surface, LIGHT_GRAY, (bubble_x, message_y, bubble_width, bubble_height), 2, border_radius=10)
-
-            # Draw message text inside bubble
-            text_y = message_y + bubble_padding
-            for line in lines:
-                line_text = self.text_font.render(line, True, text_color)
-                if is_player:
-                    # Right-align player messages with padding on right
-                    text_x = bubble_x + bubble_width - bubble_padding - line_text.get_width()
-                else:
-                    # Left-align suspect messages with dynamic padding
-                    text_x = bubble_x + bubble_padding
-                surface.blit(line_text, (text_x, text_y))
-                text_y += line_height
-
-            message_y += bubble_height + 10
-
-        # Draw loading bubble if currently loading
-        if self.is_loading:
-            self.loading_timer += 1
-            if self.loading_timer >= 8:  # Change dots every 8 frames
-                self.loading_timer = 0
-                self.loading_dots_frame = (self.loading_dots_frame + 1) % 3
-
-            # Create loading bubble
-            dots = [".", "..", "..."]
-            loading_text = dots[self.loading_dots_frame]
-
-            # Calculate bubble size for loading message
-            bubble_padding = 10
-            line_height = 20
-            loading_surface = self.text_font.render(loading_text, True, WHITE)
-            bubble_height = line_height + bubble_padding * 2
-            bubble_width = loading_surface.get_width() + bubble_padding * 2
-
-            # Position loading bubble on left (suspect side)
-            left_margin = 20
-            bubble_x = conv_x + left_margin
-            bubble_color = (80, 80, 80)
-
-            # Draw loading bubble background
-            pygame.draw.rect(surface, bubble_color, (bubble_x, message_y, bubble_width, bubble_height), border_radius=10)
-            pygame.draw.rect(surface, LIGHT_GRAY, (bubble_x, message_y, bubble_width, bubble_height), 2, border_radius=10)
-
-            # Draw loading dots inside bubble
-            text_y = message_y + bubble_padding
-            surface.blit(loading_surface, (bubble_x + bubble_padding, text_y))
-
-        # Draw input box
-        input_y = window_y + window_height - 60
-        pygame.draw.rect(surface, (60, 60, 60), (conv_x, input_y, conv_width, 40))
-        pygame.draw.rect(surface, LIGHT_GRAY, (conv_x, input_y, conv_width, 40), 2)
-
-        # Draw input text (disabled while loading)
-        if not self.is_loading:
-            input_text = self.input_font.render(self.user_input, True, WHITE)
-            surface.blit(input_text, (conv_x + 10, input_y + 8))
+        # input row
+        iy = box.bottom - 58
+        pygame.draw.line(surface, style.DUSK, (box.x + 40, iy - 12), (box.right - 40, iy - 12), 2)
+        waiting = self.is_loading or self.sprite.thinking
+        style.text(surface, ">", (tx, iy), 22, style.AMBER)
+        if self.user_input:
+            style.text(surface, self.user_input, (tx + 26, iy), 22, style.PARCHMENT)
         else:
-            # Show placeholder while loading
-            placeholder_text = self.input_font.render("(waiting for response...)", True, (100, 100, 100))
-            surface.blit(placeholder_text, (conv_x + 10, input_y + 8))
+            ph = f"{self.name} is thinking..." if waiting else f"Ask {self.name} anything..."
+            style.text(surface, ph, (tx + 26, iy), 22, style.DUSK, shadow=False)
+        if not waiting and (self.frame // 20) % 2 == 0:
+            cw = style.font(22).size(self.user_input)[0] if self.user_input else 0
+            pygame.draw.rect(surface, style.AMBER, (tx + 28 + cw, iy + 2, 10, 22))
 
-        # Draw close instruction
-        close_text = self.text_font.render("Press ESC to close", True, LIGHT_GRAY)
-        close_x = window_x + (window_width - close_text.get_width()) // 2
-        close_y = window_y + window_height - 25
-        surface.blit(close_text, (close_x, close_y))
+    def _draw_backlog(self, surface):
+        veil = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+        veil.fill((*style.INK, 200))
+        surface.blit(veil, (0, 0))
+        panel = pygame.Rect(180, 70, 1040, 760)
+        style.nine_slice(surface, panel, "assets/dialogue_box/20240707dragon9SlicesA.png", 40, 1, fill=style.NIGHT)
+        style.text(surface, f"NOTES  ·  {self.name.upper()}", (panel.x + 60, panel.y + 48), 30, style.AMBER, title=True)
+        rows = []
+        for speaker, msg in self.messages:
+            for j, ln in enumerate(style.wrap(msg, 20, panel.w - 260)):
+                rows.append((speaker if j == 0 else "", ln, speaker == "You"))
+            rows.append(("", "", False))
+        visible = 17
+        end = max(0, len(rows) - self.scroll_offset)
+        start = max(0, end - visible)
+        self.scroll_offset = len(rows) - end
+        y = panel.y + 110
+        for who, ln, mine in rows[start:end]:
+            if who:
+                style.text(surface, who, (panel.x + 60, y), 20, style.FROST if mine else style.AMBER)
+            style.text(surface, ln, (panel.x + 200, y), 20, (200, 215, 255) if mine else style.PARCHMENT)
+            y += 34
+        if not self.messages:
+            style.text(surface, "Nothing said yet.", (panel.x + 60, y), 20, style.MIST)
+        style.text(surface, "scroll to read back  ·  TAB to close", (panel.centerx, panel.bottom - 50), 16, style.DUSK, center=True, shadow=False)
