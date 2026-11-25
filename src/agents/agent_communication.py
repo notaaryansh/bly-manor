@@ -7,7 +7,6 @@ import os
 import threading
 from dotenv import load_dotenv
 from openai import OpenAI
-from .hyperspell_context import update_agent_gossip, get_gossip_summary
 
 load_dotenv()
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
@@ -202,20 +201,11 @@ React to what they said naturally (1-2 sentences)."""
             agent.personality_levels['Moody'] = min(5, agent.personality_levels['Moody'] + 0.3)
             agent.personality_levels['Trust'] = max(0, agent.personality_levels['Trust'] - 0.3)
 
-        # Store gossip in Hyperspell for persistent context management
-        if agent.gossip_heard:
-            memory_id = update_agent_gossip(agent_name, agent.gossip_heard)
-
-            # Retrieve the gossip summary from Hyperspell and send to orchestrator
-            if memory_id and self.orchestrator:
-                try:
-                    memory_id, summary = get_gossip_summary(agent_name)
-                    if summary:
-                        # Send gossip summary to orchestrator for narrative tracking
-                        self.orchestrator.record_agent_gossip(agent_name, summary)
-                        print(f"📡 Sent gossip summary for {agent_name} to orchestrator")
-                except Exception as e:
-                    print(f"⚠️ Error sending gossip summary to orchestrator: {e}")
+        # Send the latest gossip to the orchestrator for narrative tracking
+        if agent.gossip_heard and self.orchestrator:
+            latest = agent.gossip_heard[-1]
+            summary = f"{latest.get('from', 'Unknown')} told {agent_name}: {latest.get('info', '')}"
+            self.orchestrator.record_agent_gossip(agent_name, summary)
 
         # Visualize the personality update
         if self.visualizer:

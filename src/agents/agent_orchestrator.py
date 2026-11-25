@@ -434,12 +434,12 @@ Return ONLY a JSON array of 2-3 facts (strings), no other text. Example format:
 
     def record_agent_gossip(self, agent_name, gossip_summary):
         """
-        Record gossip/memory summary retrieved from Hyperspell.
+        Record a summary of gossip an agent has heard.
         This tracks what agents have been saying to each other.
 
         Args:
             agent_name: Name of the agent whose gossip was recorded
-            gossip_summary: Summary of the gossip from Hyperspell
+            gossip_summary: Short summary of the gossip
         """
         if not hasattr(self, 'agent_gossip_summaries'):
             self.agent_gossip_summaries = {}

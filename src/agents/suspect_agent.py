@@ -3,7 +3,6 @@ import json
 import random
 from dotenv import load_dotenv
 from openai import OpenAI
-from .hyperspell_context import get_agent_gossip_context
 
 load_dotenv()
 
@@ -78,14 +77,7 @@ class SuspectAgent:
         self.system_prompt = self._build_system_prompt()
 
     def _build_gossip_context(self):
-        """Build context about ALL gossip heard from other agents, using Hyperspell storage"""
-        # Try to retrieve from Hyperspell first
-        hyperspell_context = get_agent_gossip_context(self.name)
-        if hyperspell_context:
-            print(f"🔍 [DEBUG] {self.name} retrieved gossip context from Hyperspell")
-            return hyperspell_context
-
-        # Fall back to local gossip_heard list if Hyperspell unavailable or empty
+        """Build context about ALL gossip heard from other agents"""
         if not hasattr(self, 'gossip_heard') or not self.gossip_heard:
             return ""
 

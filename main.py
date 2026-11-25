@@ -2,10 +2,10 @@
 """
 Murder Mystery Detective Game - Main Entry Point
 """
+import os
 import sys
 import argparse
 from dotenv import load_dotenv
-from src.game import MurderMysteryGame
 
 
 def main():
@@ -24,6 +24,10 @@ def main():
 
     # Load environment variables
     load_dotenv()
+    if not os.getenv("OPENAI_API_KEY"):
+        sys.exit("OPENAI_API_KEY is not set. Copy .env.example to .env and add your key.")
+
+    from src.game import MurderMysteryGame  # imported after the key check: agents build OpenAI clients on import
 
     # Create and run the game
     game = MurderMysteryGame(test_mode=test_mode, visualize_mode=visualize_mode, chaos_mode=chaos_mode)

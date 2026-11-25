@@ -16,7 +16,6 @@ from src.gui import (
     ConversationScreen,
 )
 from src.agents import MurderMysteryMaster, SuspectAgent, AgentOrchestrator, AgentCommunicationManager
-from src.agents.hyperspell_context import initialize_gossip_manager
 from src.utils import init_cursors, set_default_cursor, set_map_frame_cursor, ParallaxBackground
 from src.visualization import AgentBehaviorVisualizer
 
@@ -61,9 +60,6 @@ class MurderMysteryGame:
 
         # Initialize cursors
         init_cursors()
-
-        # Initialize Hyperspell gossip manager for this game session
-        initialize_gossip_manager()
 
         # Game state
         self.test_mode = test_mode
