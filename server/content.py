@@ -1,35 +1,8 @@
 """
-Text the player reads that comes from the case: the briefing, the facts,
+Text the player reads that comes from the case: the facts,
 the investigation log lines and the results after an accusation.
 """
 from src.agents import llm
-
-
-def briefing(master):
-    """Opening case briefing. Safe to show: no murderer, no motive."""
-    remaining = len([s for s in master.suspects.values() if not s["is_victim"]])
-    return [
-        "A MURDER AT BLY MANOR",
-        "",
-        f"The body of {master.victim} was discovered in {master.crime_location}.",
-        f"Time of death: {master.time_of_death}",
-        "",
-        "Six people were at Bly Manor that night. One is dead.",
-        f"One of the {remaining} left is a murderer.",
-        "",
-        "YOUR MISSION:",
-        "• Interview all suspects carefully",
-        "• Analyze their relationships and motives",
-        "• Cross-reference their stories",
-        "• Identify inconsistencies and lies",
-        "• Determine who killed the victim",
-        "",
-        "FACTS about the case are available at any time.",
-        "LOGS record your investigation progress.",
-        "When you're certain, make your ACCUSATION.",
-        "",
-        "The truth awaits in the shadows...",
-    ]
 
 
 def facts(master):

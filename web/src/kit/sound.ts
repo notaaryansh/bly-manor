@@ -46,10 +46,27 @@ export function unlock() {
   tone("select", 520, 60, 0.12, "tri", 0.4);
   tone("open", 260, 180, 0.14, "tri", 0.8);
   tone("gavel", 55, 400, 0.6, "sine", -0.6, 0.35);
+  thunder();
   startAmbience(ac);
 }
 
-export function play(name: string, speaker?: string) {
+/** A small, distant roll of thunder: low brown noise with a few swells, 2.5s at 11 kHz (~110 KB). */
+function thunder() {
+  if (!ac) return;
+  const rate = 11025, n = (rate * 2.5) | 0;
+  const buf = ac.createBuffer(1, n, rate);
+  const d = buf.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < n; i++) {
+    const t = i / n;
+    last = (last + 0.04 * (Math.random() * 2 - 1)) * 0.995;
+    const env = Math.min(1, t / 0.06) * (1 - t) ** 2.2 * (0.65 + 0.35 * Math.abs(Math.sin(t * 9)));
+    d[i] = last * 6 * env;
+  }
+  buffers.set("thunder", buf);
+}
+
+export function play(name: string, speaker?: string, delay = 0) {
   const buf = buffers.get(name);
   if (!ac || !buf) return;
   const src = ac.createBufferSource();
@@ -58,6 +75,10 @@ export function play(name: string, speaker?: string) {
     const base = VOICE_PITCH[speaker ?? ""] ?? 300;
     src.playbackRate.value = (base / 300) * [1, 1.06, 0.94][(Math.random() * 3) | 0];
   }
-  src.connect(ac.destination);
-  src.start();
+  if (name === "thunder") {
+    const g = ac.createGain();
+    g.gain.value = 0.25; // small and far away
+    src.connect(g).connect(ac.destination);
+  } else src.connect(ac.destination);
+  src.start(ac.currentTime + delay);
 }
