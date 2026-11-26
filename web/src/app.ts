@@ -17,7 +17,7 @@ export interface Screen extends Handlers {
 
 const STEP = 1000 / 60;
 /** Dev-only numbers for checking the frame budget (window.__bly in the console). */
-const stats = { drawMs: 0, halfRate: false, step };
+const stats = { drawMs: 0, halfRate: false, step, screen: null as Screen | null };
 if (import.meta.env.DEV) (window as unknown as { __bly: typeof stats }).__bly = stats;
 
 /** Dev/testing: advance n logic steps and draw once, even when the tab is in the background. */
@@ -36,6 +36,7 @@ let ctx: CanvasRenderingContext2D;
 export function show(next: Screen) {
   screen?.leave?.();
   screen = next;
+  if (import.meta.env.DEV) stats.screen = next;
   routeTo(next);
   next.enter?.();
 }

@@ -1,14 +1,16 @@
 import { show, start } from "./app";
 import { BACKGROUND_IMAGES } from "./kit/background";
-import { fx } from "./kit/fx";
 import { initInput } from "./kit/input";
 import { BUTTONS, FRAME_A, FRAME_B, FRAME_D, PLATE_A, PLATE_B, PORTRAITS, loadFonts, loadImages } from "./kit/style";
 import { BoardScreen, plainSidePanel } from "./screens/board";
 import { RESULT_RIGHT, RESULT_WRONG } from "./screens/modal";
+import { InterrogationScreen } from "./screens/interrogation";
 import { TitleScreen } from "./screens/title";
 
+let boardScreen: BoardScreen | null = null;
 function board(): BoardScreen {
-  return new BoardScreen(() => fx.toast("Interrogations open in the next update."), plainSidePanel);
+  boardScreen ??= new BoardScreen((name) => show(new InterrogationScreen(name, () => show(board()), plainSidePanel)), plainSidePanel);
+  return boardScreen;
 }
 
 async function boot() {

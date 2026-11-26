@@ -11,6 +11,7 @@ export let game: GameState | null = null;
 
 export async function deal() {
   game = await newGame(TEST, CHAOS);
+  transcripts.clear();
   return game;
 }
 
@@ -29,4 +30,12 @@ export function setMoods(name: string, moods: Moods) {
 export function markQuestioned(name: string) {
   const s = game?.suspects.find((x) => x.name === name);
   if (s) s.questioned = true;
+}
+
+/** What each suspect and the detective said, for the notes view. */
+export const transcripts = new Map<string, [speaker: string, text: string][]>();
+export function transcript(name: string) {
+  let t = transcripts.get(name);
+  if (!t) transcripts.set(name, (t = []));
+  return t;
 }
