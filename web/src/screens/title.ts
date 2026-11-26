@@ -4,6 +4,7 @@ import type { Screen } from "../app";
 import { drawBackground, updateBackground } from "../kit/background";
 import { easeOutBack, fx } from "../kit/fx";
 import { GAME_W, H } from "../kit/input";
+import { setMood } from "../kit/ambience";
 import { play } from "../kit/sound";
 import { AMBER, INK, MIST, PARCHMENT, rgb, text } from "../kit/style";
 
@@ -25,6 +26,10 @@ export class TitleScreen implements Screen {
       this.ry[i] = rand() * H;
       this.rs[i] = [10, 14, 18][(rand() * 3) | 0];
     }
+  }
+
+  enter() {
+    setMood("storm");
   }
 
   update() {
@@ -76,6 +81,7 @@ export class TitleScreen implements Screen {
     text(ctx, "The most real murder mystery game you'll ever play.", cx, ty + 110, 20, MIST, { align: "center" });
     if (f > 50 && ((f / 30) | 0) % 2 === 0)
       text(ctx, "PRESS SPACE", cx, H - 190, 28, AMBER, { title: true, align: "center" });
+    text(ctx, "headphones on  ·  M to mute", cx, H - 48, 14, MIST, { align: "center", shadow: false });
 
     fx.overlay(ctx, GAME_W, H);
     this.sidePanel(ctx);

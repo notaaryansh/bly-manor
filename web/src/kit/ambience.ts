@@ -1,0 +1,185 @@
+// Soft rain and a slow, moody score, all synthesized (royalty-free by
+// construction, nothing to download). Built light: the rain is one second of
+// noise at a low sample rate looped through filters, and the music schedules a
+// few oscillators at a time a moment ahead of when they play.
+
+type Mood = "storm" | "calm" | "tense";
+
+// chord roots (Hz) and qualities for each mood; one chord every CHORD seconds
+const A2 = 110, C3 = 130.81, D3 = 146.83, E3 = 164.81, F2 = 87.31, G2 = 98;
+const PROGRESSIONS: Record<Mood, [number, "min" | "maj"][]> = {
+  storm: [[A2, "min"], [F2, "maj"], [C3, "maj"], [G2, "maj"]],
+  calm: [[A2, "min"], [F2, "maj"], [C3, "maj"], [G2, "maj"]],
+  tense: [[A2, "min"], [D3 / 2, "min"], [E3 / 2, "maj"], [A2, "min"]],
+};
+const CHORD = 7;
+const MUTE_KEY = "bly-muted";
+
+let ac: AudioContext | null = null;
+let master: GainNode, rainGain: GainNode, musicGain: GainNode, echo: DelayNode, rainFilter: BiquadFilterNode;
+let mood: Mood = "storm";
+let nextChord = 0;
+let chordIndex = 0;
+let muted = false;
+try {
+  muted = localStorage.getItem(MUTE_KEY) === "1";
+} catch {
+  /* private mode: just not remembered */
+}
+
+/** Called once audio is allowed (first key or click). */
+export function startAmbience(ctx: AudioContext) {
+  if (ac) return;
+  ac = ctx;
+  master = ac.createGain();
+  master.gain.value = muted ? 0 : 1;
+  master.connect(ac.destination);
+
+  // rain: 1s of brown-ish noise at 22 kHz, looped, band-limited, gently breathing
+  const rate = 22050;
+  const buf = ac.createBuffer(1, rate, rate);
+  const d = buf.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < rate; i++) {
+    last = (last + 0.06 * (Math.random() * 2 - 1)) * 0.97;
+    d[i] = last * 3 + (Math.random() * 2 - 1) * 0.15;
+  }
+  const noise = ac.createBufferSource();
+  noise.buffer = buf;
+  noise.loop = true;
+  rainFilter = ac.createBiquadFilter();
+  rainFilter.type = "lowpass";
+  rainFilter.frequency.value = 1400;
+  const high = ac.createBiquadFilter();
+  high.type = "highpass";
+  high.frequency.value = 250;
+  const lfo = ac.createOscillator();
+  lfo.frequency.value = 0.07;
+  const lfoDepth = ac.createGain();
+  lfoDepth.gain.value = 300;
+  lfo.connect(lfoDepth).connect(rainFilter.frequency);
+  rainGain = ac.createGain();
+  rainGain.gain.value = 0;
+  noise.connect(high).connect(rainFilter).connect(rainGain).connect(master);
+  noise.start();
+  lfo.start();
+
+  // music bus with one shared echo
+  musicGain = ac.createGain();
+  musicGain.gain.value = 0;
+  musicGain.connect(master);
+  echo = ac.createDelay(1);
+  echo.delayTime.value = 0.42;
+  const feedback = ac.createGain();
+  feedback.gain.value = 0.32;
+  const wet = ac.createGain();
+  wet.gain.value = 0.35;
+  echo.connect(feedback).connect(echo);
+  echo.connect(wet).connect(musicGain);
+
+  nextChord = ac.currentTime + 0.5;
+  setMood(mood);
+  window.setInterval(schedule, 400);
+}
+
+/** storm on the title, calm on the board, tense in interrogations. */
+export function setMood(m: Mood) {
+  mood = m;
+  if (!ac) return;
+  const t = ac.currentTime;
+  const rain = m === "storm" ? 0.16 : m === "calm" ? 0.09 : 0.05; // indoors you hear it through the window
+  const music = m === "tense" ? 0.13 : 0.11;
+  rainGain.gain.setTargetAtTime(rain, t, 1.2);
+  musicGain.gain.setTargetAtTime(music, t, 1.5);
+  rainFilter.frequency.setTargetAtTime(m === "tense" ? 900 : 1400, t, 1);
+}
+
+export function toggleMute() {
+  muted = !muted;
+  try {
+    localStorage.setItem(MUTE_KEY, muted ? "1" : "0");
+  } catch {
+    /* not remembered */
+  }
+  if (ac) master.gain.setTargetAtTime(muted ? 0 : 1, ac.currentTime, 0.1);
+  return muted;
+}
+export const isMuted = () => muted;
+
+// ------------------------------------------------------------ the score
+function schedule() {
+  if (!ac || ac.state !== "running") return;
+  while (nextChord < ac.currentTime + 1) {
+    const prog = PROGRESSIONS[mood];
+    const [root, quality] = prog[chordIndex % prog.length];
+    pad(root, quality, nextChord);
+    // sparse music-box notes over the chord, more of them when it's tense
+    const tones = [root * 4, root * 4 * (quality === "min" ? 1.189 : 1.26), root * 6, root * 8];
+    const count = mood === "tense" ? 5 : 3;
+    for (let i = 0; i < count; i++) if (Math.random() < 0.7) bell(tones[(Math.random() * tones.length) | 0], nextChord + 0.6 + i * (CHORD / count));
+    if (Math.random() < 0.3) drip(nextChord + Math.random() * CHORD);
+    nextChord += CHORD;
+    chordIndex++;
+  }
+}
+
+function pad(root: number, quality: "min" | "maj", at: number) {
+  const third = quality === "min" ? 1.189 : 1.26;
+  const filter = ac!.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = mood === "tense" ? 600 : 850;
+  const env = ac!.createGain();
+  env.gain.setValueAtTime(0, at);
+  env.gain.linearRampToValueAtTime(0.16, at + 2.2);
+  env.gain.setValueAtTime(0.16, at + CHORD - 1.5);
+  env.gain.linearRampToValueAtTime(0, at + CHORD + 1.5);
+  filter.connect(env).connect(musicGain);
+  for (const [f, detune] of [[root, -6], [root * third, 5], [root * 1.5, -3], [root / 2, 0]] as [number, number][]) {
+    const o = ac!.createOscillator();
+    o.type = "triangle";
+    o.frequency.value = f;
+    o.detune.value = detune;
+    o.connect(filter);
+    o.start(at);
+    o.stop(at + CHORD + 1.6);
+  }
+}
+
+function bell(freq: number, at: number) {
+  const o = ac!.createOscillator();
+  o.type = "sine";
+  o.frequency.value = freq;
+  const env = ac!.createGain();
+  env.gain.setValueAtTime(0, at);
+  env.gain.linearRampToValueAtTime(0.09, at + 0.01);
+  env.gain.exponentialRampToValueAtTime(0.0005, at + 2.2);
+  o.connect(env);
+  env.connect(musicGain);
+  env.connect(echo);
+  o.start(at);
+  o.stop(at + 2.3);
+}
+
+/** A single water drop off the eaves. */
+function drip(at: number) {
+  const o = ac!.createOscillator();
+  o.type = "sine";
+  o.frequency.setValueAtTime(1800 + Math.random() * 1200, at);
+  o.frequency.exponentialRampToValueAtTime(600, at + 0.08);
+  const env = ac!.createGain();
+  env.gain.setValueAtTime(0.03, at);
+  env.gain.exponentialRampToValueAtTime(0.0005, at + 0.1);
+  o.connect(env).connect(rainGain);
+  o.start(at);
+  o.stop(at + 0.12);
+}
+
+/** Dev/testing: what the ambience is doing right now. */
+export const ambienceState = () => ({
+  running: ac?.state ?? "none",
+  mood,
+  muted,
+  rain: ac ? +rainGain.gain.value.toFixed(3) : 0,
+  music: ac ? +musicGain.gain.value.toFixed(3) : 0,
+  chords: chordIndex,
+});

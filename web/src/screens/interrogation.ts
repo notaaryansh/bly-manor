@@ -8,6 +8,7 @@ import { ask, leave as leaveRoom, opening, type Moods, type Reply } from "../api
 import type { Screen } from "../app";
 import { easeOutBack, easeOutCubic, fx } from "../kit/fx";
 import { GAME_W, H, clearTyped, startTyping, stopTyping, typed } from "../kit/input";
+import { setMood } from "../kit/ambience";
 import { play } from "../kit/sound";
 import {
   AMBER, DUSK, EMBER, FRAME_A, FRAME_B, FROST, INK, MIST, MOSS, NIGHT, PARCHMENT, PLATE_A, PLATE_B,
@@ -63,6 +64,7 @@ export class InterrogationScreen implements Screen {
   }
 
   enter() {
+    setMood("tense");
     suspectBoard.focus = this.name;
     play("open");
     startTyping(120);

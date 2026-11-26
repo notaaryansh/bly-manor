@@ -2,6 +2,8 @@
 // into a short mono buffer; voice pitches reuse one buffer via playbackRate.
 // Browsers only allow audio after a user gesture, so unlock() runs on the first key or click.
 
+import { startAmbience } from "./ambience";
+
 let ac: AudioContext | null = null;
 const buffers = new Map<string, AudioBuffer>();
 
@@ -44,6 +46,7 @@ export function unlock() {
   tone("select", 520, 60, 0.12, "tri", 0.4);
   tone("open", 260, 180, 0.14, "tri", 0.8);
   tone("gavel", 55, 400, 0.6, "sine", -0.6, 0.35);
+  startAmbience(ac);
 }
 
 export function play(name: string, speaker?: string) {
