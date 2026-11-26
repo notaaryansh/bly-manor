@@ -80,7 +80,8 @@ export function setMood(m: Mood) {
   mood = m;
   if (!ac) return;
   const t = ac.currentTime;
-  const rain = m === "storm" ? 0.55 : m === "calm" ? 0.32 : 0.42;
+  // very quiet: the rain sits under everything, never on top of it
+  const rain = m === "storm" ? 0.14 : m === "calm" ? 0.08 : 0.1;
   const music = m === "tense" ? 0.13 : 0.11;
   rainGain.gain.setTargetAtTime(rain, t, 1.2);
   musicGain.gain.setTargetAtTime(music, t, 1.5);
