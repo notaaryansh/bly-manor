@@ -48,7 +48,7 @@ def test_new_game_hides_the_answer(game):
     living = [s for s in game["suspects"] if not s["is_victim"]]
     assert len(game["suspects"]) == 6 and len(living) == 5
     assert all("moods" in s for s in living)
-    assert game["briefing"] and game["facts"]
+    assert game["facts"]
 
 
 def test_opening_and_streamed_answer(game):

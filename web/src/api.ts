@@ -22,7 +22,6 @@ export interface GameState {
   time_of_death: string;
   suspects: Suspect[];
   relationships: Record<string, string>;
-  briefing: string[];
   facts: string[];
   accused: string | null;
 }

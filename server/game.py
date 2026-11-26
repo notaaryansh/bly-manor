@@ -82,7 +82,6 @@ class Game:
             "time_of_death": m.time_of_death,
             "suspects": suspects,
             "relationships": m.relationships,
-            "briefing": content.briefing(m),
             "facts": content.facts(m),
             "accused": self.accused,
         }
