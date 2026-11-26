@@ -1,10 +1,5 @@
-import os
 import json
-from dotenv import load_dotenv
-from openai import OpenAI
-
-load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+from . import llm
 
 
 class AgentOrchestrator:
@@ -200,8 +195,8 @@ Return ONLY a JSON array of 2-3 facts (strings), no other text. Example format:
 """
 
         try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
+            response = llm.client().chat.completions.create(
+                model=llm.MODEL,
                 messages=[
                     {"role": "user", "content": prompt}
                 ],

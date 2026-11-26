@@ -145,7 +145,7 @@ class MurderMysteryGame:
                 {},  # Will be populated with agents dict
                 self.master.relationships,
                 self.master.case_state,
-                self.visualizer if self.visualize_mode else None,
+                on_gossip=self._show_gossip,
             )
 
         # Create menu buttons (left side)
@@ -222,6 +222,13 @@ class MurderMysteryGame:
                 self.visualizer.send_orchestrator_briefing(suspect_name)  # Default 180 frames = 3 seconds
 
         return True
+
+    def _show_gossip(self, src, dst, text, rel_type, levels):
+        """Called from the gossip thread after each hop."""
+        fx.post(fx.toast, f"{dst} heard something from {src}...", style.ROSE)
+        if self.visualize_mode and self.visualizer:
+            self.visualizer.send_agent_communication(src, dst, text=text)
+            self.visualizer.send_personality_update(dst, levels)
 
     def _load_test_case(self):
         """Load test case from JSON cache file"""

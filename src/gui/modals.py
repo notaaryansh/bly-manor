@@ -103,8 +103,7 @@ class InfoModal:
 
     def generate_snippet_for_suspect(self, suspect_name, conv_screen):
         """Generate a single sentence snippet asynchronously"""
-        from openai import OpenAI
-        import os
+        from src.agents import llm
 
         conversation_text = "\n".join(
             [f"{speaker}: {msg}" for speaker, msg in conv_screen.messages]
@@ -130,9 +129,8 @@ IMPORTANT: The snippet MUST be completely fresh and different from any previous 
 Observation:"""
 
         try:
-            client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
+            response = llm.client().chat.completions.create(
+                model=llm.MODEL,
                 messages=[{"role": "user", "content": snippet_prompt}],
                 temperature=0.7,
                 max_tokens=50,

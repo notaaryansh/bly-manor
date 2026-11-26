@@ -3,15 +3,8 @@ Agent-to-agent communication system for chaos mode.
 Handles inter-agent conversations and information sharing based on relationships.
 """
 
-import os
 import threading
-from dotenv import load_dotenv
-from openai import OpenAI
-from src.ui.fx import fx
-from src.ui import style
-
-load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+from . import llm
 
 
 class AgentCommunicationManager:
@@ -20,18 +13,19 @@ class AgentCommunicationManager:
     Agents share information based on their relationships and personalities.
     """
 
-    def __init__(self, agents_dict, relationships, case_state, visualizer=None):
+    def __init__(self, agents_dict, relationships, case_state, on_gossip=None):
         """
         Args:
             agents_dict: Dict of agent_name -> SuspectAgent
             relationships: Dict of relationship_pair -> relationship_type
             case_state: The case state dict
-            visualizer: Optional rumor board to show gossip travelling
+            on_gossip: Optional callback(from_name, to_name, text, rel_type, to_levels),
+                called after each hop so a UI can show the gossip travelling
         """
         self.agents = agents_dict
         self.relationships = relationships
         self.case_state = case_state
-        self.visualizer = visualizer
+        self.on_gossip = on_gossip
 
 
     def _get_relationship_type(self, agent1_name, agent2_name):
@@ -117,8 +111,8 @@ Truthfulness level: {truthfulness:.2f}
 Tell them about the interrogation naturally (1-2 sentences). Adjust honesty to match your truthfulness level."""
 
         try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
+            response = llm.client().chat.completions.create(
+                model=llm.MODEL,
                 messages=[{"role": "user", "content": share_prompt}],
                 temperature=0.8,
                 max_tokens=150
@@ -126,14 +120,10 @@ Tell them about the interrogation naturally (1-2 sentences). Adjust honesty to m
 
             agent1_share = response.choices[0].message.content
 
-            # Let the player know the rumor mill is turning
-            fx.post(fx.toast, f"{agent2_name} heard something from {agent1_name}...", style.ROSE)
-
-            # Show visualization arrow if visualizer is available
-            if self.visualizer:
-                self.visualizer.send_agent_communication(agent1_name, agent2_name, duration=120, text=agent1_share)
-
             self._update_agent_from_conversation(agent2_name, agent1_share, agent1_name, rel_type)
+            if self.on_gossip:
+                levels = self.agents[agent2_name].get_personality_state()
+                self.on_gossip(agent1_name, agent2_name, agent1_share, rel_type, levels)
 
         except Exception as e:
             print(f"Error in communication between {agent1_name} and {agent2_name}: {e}")
@@ -170,7 +160,3 @@ Tell them about the interrogation naturally (1-2 sentences). Adjust honesty to m
             agent.personality_levels['Moody'] = min(5, agent.personality_levels['Moody'] + 0.3)
             agent.personality_levels['Trust'] = max(0, agent.personality_levels['Trust'] - 0.3)
 
-
-        # Visualize the personality update
-        if self.visualizer:
-            self.visualizer.send_personality_update(agent_name, agent.personality_levels)

@@ -1,12 +1,6 @@
-import os
 import json
 import random
-from dotenv import load_dotenv
-from openai import OpenAI
-
-load_dotenv()
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+from . import llm
 
 
 class SuspectAgent:
@@ -33,6 +27,7 @@ class SuspectAgent:
         self.case_state = case_state
         self.clues = clues or []
         self.conversation_history = []
+        self.last_changes = {}
         self.orchestrator = orchestrator
 
         # Find clues this suspect knows about
@@ -291,49 +286,41 @@ Remember: Your personality levels will change based on how the detective treats 
         }
         return descriptions.get(level, "Unknown")
 
-    def respond(self, question):
+    def respond_stream(self, question):
         """
-        Get a response from the suspect to a question
-
-        Args:
-            question: The detective's question
-
-        Returns:
-            A tuple of (response, personality_changes)
+        Yield the suspect's reply in pieces as the model writes it.
+        When the generator is done, self.last_changes holds the mood changes.
         """
-        # Add detective's question to history
-        self.conversation_history.append({
-            "role": "user",
-            "content": question
-        })
+        self.conversation_history.append({"role": "user", "content": question})
 
         # Update system prompt with current personality levels AND conversation context
         self.system_prompt = self._build_system_prompt(self.conversation_history)
+        messages_with_system = [{"role": "system", "content": self.system_prompt}] + self.conversation_history
 
-        # Get response from OpenAI
-        messages_with_system = [
-            {"role": "system", "content": self.system_prompt}
-        ] + self.conversation_history
-
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
+        stream = llm.client().chat.completions.create(
+            model=llm.MODEL,
             messages=messages_with_system,
             temperature=0.9,
-            max_tokens=300
+            max_tokens=300,
+            stream=True,
         )
+        parts = []
+        for chunk in stream:
+            if not chunk.choices:
+                continue
+            piece = chunk.choices[0].delta.content or ""
+            if piece:
+                parts.append(piece)
+                yield piece
 
-        assistant_response = response.choices[0].message.content
+        reply = "".join(parts)
+        self.conversation_history.append({"role": "assistant", "content": reply})
+        self.last_changes = self._update_personality_levels(question, reply)
 
-        # Add assistant response to history
-        self.conversation_history.append({
-            "role": "assistant",
-            "content": assistant_response
-        })
-
-        # Update personality levels based on the interaction
-        personality_changes = self._update_personality_levels(question, assistant_response)
-
-        return assistant_response, personality_changes
+    def respond(self, question):
+        """Get the whole reply at once. Returns (response, personality_changes)."""
+        reply = "".join(self.respond_stream(question))
+        return reply, self.last_changes
 
     def _update_personality_levels(self, question, response):
         """
@@ -385,8 +372,8 @@ Example: {{"Anxious": 1, "Confident": -1}}
 Return ONLY the JSON object."""
 
         try:
-            analysis_response = client.chat.completions.create(
-                model="gpt-4o-mini",
+            analysis_response = llm.client().chat.completions.create(
+                model=llm.MODEL,
                 messages=[
                     {"role": "user", "content": analysis_prompt}
                 ],
@@ -424,8 +411,8 @@ The suspect should:
 Keep it to 1-2 sentences max. Return ONLY the statement, no extra text."""
 
         try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
+            response = llm.client().chat.completions.create(
+                model=llm.MODEL,
                 messages=[
                     {"role": "user", "content": opening_prompt}
                 ],
