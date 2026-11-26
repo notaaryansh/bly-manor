@@ -2,7 +2,7 @@
 Text the player reads that comes from the case: the facts,
 the investigation log lines and the results after an accusation.
 """
-from src.agents import llm
+from .agents import llm
 
 
 def facts(master):
