@@ -1,12 +1,5 @@
-import os
 import json
-from dotenv import load_dotenv
-from openai import OpenAI
-
-# Load environment variables
-load_dotenv()
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+from . import llm
 
 # 6 Fixed characters with consistent traits
 FIXED_SUSPECTS = {
@@ -205,8 +198,8 @@ Return your response as a valid JSON object with this exact structure:
 
 Make sure all relationships are bidirectional and consistent. Return ONLY the JSON object, no other text."""
 
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
+        response = llm.client().chat.completions.create(
+            model=llm.MODEL,
             messages=[
                 {"role": "system", "content": "You are a JSON generator for a murder mystery game. Always return valid JSON only."},
                 {"role": "user", "content": prompt}

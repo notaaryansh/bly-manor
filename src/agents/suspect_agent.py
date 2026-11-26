@@ -1,12 +1,6 @@
-import os
 import json
 import random
-from dotenv import load_dotenv
-from openai import OpenAI
-
-load_dotenv()
-
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+from . import llm
 
 
 class SuspectAgent:
@@ -315,8 +309,8 @@ Remember: Your personality levels will change based on how the detective treats 
             {"role": "system", "content": self.system_prompt}
         ] + self.conversation_history
 
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
+        response = llm.client().chat.completions.create(
+            model=llm.MODEL,
             messages=messages_with_system,
             temperature=0.9,
             max_tokens=300
@@ -385,8 +379,8 @@ Example: {{"Anxious": 1, "Confident": -1}}
 Return ONLY the JSON object."""
 
         try:
-            analysis_response = client.chat.completions.create(
-                model="gpt-4o-mini",
+            analysis_response = llm.client().chat.completions.create(
+                model=llm.MODEL,
                 messages=[
                     {"role": "user", "content": analysis_prompt}
                 ],
@@ -424,8 +418,8 @@ The suspect should:
 Keep it to 1-2 sentences max. Return ONLY the statement, no extra text."""
 
         try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
+            response = llm.client().chat.completions.create(
+                model=llm.MODEL,
                 messages=[
                     {"role": "user", "content": opening_prompt}
                 ],

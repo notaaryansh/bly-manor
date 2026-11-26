@@ -3,15 +3,10 @@ Agent-to-agent communication system for chaos mode.
 Handles inter-agent conversations and information sharing based on relationships.
 """
 
-import os
 import threading
-from dotenv import load_dotenv
-from openai import OpenAI
+from . import llm
 from src.ui.fx import fx
 from src.ui import style
-
-load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 
 class AgentCommunicationManager:
@@ -117,8 +112,8 @@ Truthfulness level: {truthfulness:.2f}
 Tell them about the interrogation naturally (1-2 sentences). Adjust honesty to match your truthfulness level."""
 
         try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
+            response = llm.client().chat.completions.create(
+                model=llm.MODEL,
                 messages=[{"role": "user", "content": share_prompt}],
                 temperature=0.8,
                 max_tokens=150
