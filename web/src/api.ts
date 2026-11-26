@@ -16,7 +16,6 @@ export interface Suspect {
 
 export interface GameState {
   id: string;
-  chaos: boolean;
   victim: string;
   crime_location: string;
   cause_of_death: string;
@@ -60,7 +59,7 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   return r.json() as Promise<T>;
 }
 
-export const newGame = (test = false, chaos = true) => call<GameState>("POST", "/games", { test, chaos });
+export const newGame = (test = false) => call<GameState>("POST", "/games", { test });
 export const getGame = (id: string) => call<GameState>("GET", `/games/${id}`);
 export const opening = (id: string, name: string) =>
   call<{ text: string; moods: Moods }>("POST", `/games/${id}/suspects/${name}/opening`);

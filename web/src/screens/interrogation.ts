@@ -16,6 +16,7 @@ import {
 import { roomFor, type Room } from "../scene/room";
 import { LABELS, Sprite, choose, shakeFor } from "../scene/sprite";
 import * as session from "../session";
+import { suspectBoard } from "./suspectBoard";
 
 const G = 8, MARGIN = 48, FRAME = 16, PAD = 40;
 const BOX = { x: MARGIN, y: H - MARGIN - 29 * G, w: GAME_W - 2 * MARGIN, h: 29 * G }; // 48,620 1304x232
@@ -62,6 +63,7 @@ export class InterrogationScreen implements Screen {
   }
 
   enter() {
+    suspectBoard.focus = this.name;
     play("open");
     startTyping(120);
     fx.showToasts = false;
@@ -69,6 +71,7 @@ export class InterrogationScreen implements Screen {
   }
 
   leave() {
+    suspectBoard.focus = null;
     stopTyping();
   }
 

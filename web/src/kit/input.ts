@@ -6,7 +6,7 @@ import { unlock } from "./sound";
 
 export const W = 1800;
 export const H = 900;
-export const GAME_W = 1400; // the rumor board takes the 400px on the right
+export const GAME_W = 1400; // the suspects board takes the 400px on the right
 
 export interface Handlers {
   key?(e: KeyboardEvent): void;

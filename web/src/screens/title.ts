@@ -3,7 +3,7 @@
 import type { Screen } from "../app";
 import { drawBackground, updateBackground } from "../kit/background";
 import { easeOutBack, fx } from "../kit/fx";
-import { GAME_W, H, W } from "../kit/input";
+import { GAME_W, H } from "../kit/input";
 import { play } from "../kit/sound";
 import { AMBER, INK, MIST, PARCHMENT, rgb, text } from "../kit/style";
 
@@ -17,7 +17,7 @@ export class TitleScreen implements Screen {
   private ry = new Float32Array(DROPS);
   private rs = new Uint8Array(DROPS);
 
-  constructor(private onStart: () => void) {
+  constructor(private onStart: () => void, private sidePanel: (ctx: CanvasRenderingContext2D) => void) {
     let seed = 3;
     const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     for (let i = 0; i < DROPS; i++) {
@@ -73,13 +73,11 @@ export class TitleScreen implements Screen {
     const ty = Math.round(H / 2 - 120 - (1 - easeOutBack(f / 50)) * 200);
     text(ctx, "MURDER AT", cx, ty - 70, 48, MIST, { title: true, align: "center" });
     text(ctx, "BLY MANOR", cx, ty + 10, 120, PARCHMENT, { title: true, align: "center" });
-    text(ctx, "Six guests. One body. Every suspect has something to hide.", cx, ty + 110, 20, MIST, { align: "center" });
+    text(ctx, "The most real murder mystery game you'll ever play.", cx, ty + 110, 20, MIST, { align: "center" });
     if (f > 50 && ((f / 30) | 0) % 2 === 0)
       text(ctx, "PRESS SPACE", cx, H - 190, 28, AMBER, { title: true, align: "center" });
 
     fx.overlay(ctx, GAME_W, H);
-    // the rumor board's column, filled in later screens
-    ctx.fillStyle = rgb([40, 26, 22]);
-    ctx.fillRect(GAME_W, 0, W - GAME_W, H);
+    this.sidePanel(ctx);
   }
 }

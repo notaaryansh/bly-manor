@@ -6,7 +6,7 @@ import { accuse, logs as fetchLogs, type Verdict } from "../api";
 import type { Screen } from "../app";
 import { drawBackground, updateBackground } from "../kit/background";
 import { easeOutBack, fx } from "../kit/fx";
-import { GAME_W, H, W, mouse } from "../kit/input";
+import { GAME_W, H, mouse } from "../kit/input";
 import { play } from "../kit/sound";
 import {
   AMBER, BLOOD, INK, MIST, MOSS, PARCHMENT, rgb, text, vignette,
@@ -203,11 +203,4 @@ export class BoardScreen implements Screen {
       text(ctx, `${v.name} ${v.text === "GUILTY" ? "did it." : "didn't do it."}`, GAME_W / 2, H / 2 + 60, 28, PARCHMENT,
         { align: "center", alpha: fade * easeOutBack((v.t - 18) / 10) });
   }
-}
-
-/** Until the rumor board lands, its column is a plain dark panel. */
-export function plainSidePanel(ctx: CanvasRenderingContext2D) {
-  ctx.fillStyle = rgb([40, 26, 22]);
-  ctx.fillRect(GAME_W, 0, W - GAME_W, H);
-  text(ctx, "RUMOR BOARD", GAME_W + (W - GAME_W) / 2, H / 2, 20, INK, { title: true, align: "center", shadow: false });
 }
