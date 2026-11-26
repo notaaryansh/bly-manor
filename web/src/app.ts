@@ -24,6 +24,7 @@ if (import.meta.env.DEV) (window as unknown as { __bly: typeof stats }).__bly = 
 function step(n = 1) {
   for (let i = 0; i < n; i++) {
     fx.update();
+    for (const t of tickers) t();
     screen?.update();
   }
   fx.begin(ctx, W, H);
@@ -31,6 +32,9 @@ function step(n = 1) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 let screen: Screen | null = null;
+const tickers: (() => void)[] = [];
+/** Run fn every logic step, whatever screen is showing (e.g. the suspects board). */
+export const tick = (fn: () => void) => tickers.push(fn);
 let ctx: CanvasRenderingContext2D;
 
 export function show(next: Screen) {
@@ -57,6 +61,7 @@ export function start(canvas: HTMLCanvasElement) {
     let steps = 0;
     while (acc >= STEP && steps < 4) {
       fx.update();
+      for (const t of tickers) t();
       screen?.update();
       acc -= STEP;
       steps++;
