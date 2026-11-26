@@ -41,21 +41,15 @@ export function startAmbience(ctx: AudioContext) {
     master.connect(analyser);
   }
 
-  // rain: a soft bright hiss plus thousands of tiny droplet ticks, 2s of stereo
-  // at 22 kHz (~350 KB) looped, with the rumble cut out
-  const noise = ac.createBufferSource();
-  noise.buffer = rainBuffer(ac);
-  noise.loop = true;
-  const high = ac.createBiquadFilter();
-  high.type = "highpass";
-  high.frequency.value = 500;
+  // rain: a real recording (CC0, 12s mono loop, ~97 KB). Synthesized rain is
+  // only the fallback when the file can't load.
   rainFilter = ac.createBiquadFilter();
   rainFilter.type = "lowpass";
   rainFilter.frequency.value = 7000;
   rainGain = ac.createGain();
   rainGain.gain.value = 0;
-  noise.connect(high).connect(rainFilter).connect(rainGain).connect(master);
-  noise.start();
+  rainFilter.connect(rainGain).connect(master);
+  loadRain(ac);
 
   // music bus with one shared echo
   musicGain = ac.createGain();
@@ -81,7 +75,7 @@ export function setMood(m: Mood) {
   if (!ac) return;
   const t = ac.currentTime;
   // very quiet: the rain sits under everything, never on top of it
-  const rain = m === "storm" ? 0.14 : m === "calm" ? 0.08 : 0.1;
+  const rain = (m === "storm" ? 0.14 : m === "calm" ? 0.08 : 0.1) * rainBoost;
   const music = m === "tense" ? 0.13 : 0.11;
   rainGain.gain.setTargetAtTime(rain, t, 1.2);
   musicGain.gain.setTargetAtTime(music, t, 1.5);
@@ -89,8 +83,36 @@ export function setMood(m: Mood) {
   rainFilter.frequency.setTargetAtTime(m === "tense" ? 1600 : m === "calm" ? 5000 : 7000, t, 1);
 }
 
+// the recording is normalised quieter than the synth, so it gets a fixed lift
+let rainBoost = 1;
+
+async function loadRain(ctx: AudioContext) {
+  let buf: AudioBuffer;
+  try {
+    const res = await fetch("/assets/audio/rain.mp3");
+    if (!res.ok) throw new Error(String(res.status));
+    buf = await ctx.decodeAudioData(await res.arrayBuffer());
+    rainBoost = 2.5;
+  } catch {
+    buf = rainBuffer(ctx);
+  }
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  // some browsers pad decoded MP3s with a few ms of silence: loop inside it
+  const d = buf.getChannelData(0);
+  let a = 0, b = d.length - 1;
+  while (a < b && Math.abs(d[a]) < 0.002) a++;
+  while (b > a && Math.abs(d[b]) < 0.002) b--;
+  src.loopStart = a / buf.sampleRate;
+  src.loopEnd = (b + 1) / buf.sampleRate;
+  src.connect(rainFilter);
+  src.start(0, src.loopStart);
+  setMood(mood);
+}
+
 /**
- * Rain = a soft hiss plus many tiny droplet ticks of random size, and a few
+ * Fallback rain = a soft hiss plus many tiny droplet ticks of random size, and a few
  * brighter plinks. Left and right are different so it surrounds you.
  */
 function rainBuffer(ctx: AudioContext) {
