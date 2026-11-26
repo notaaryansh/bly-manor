@@ -6,7 +6,7 @@ import { accuse, logs as fetchLogs, type Verdict } from "../api";
 import type { Screen } from "../app";
 import { drawBackground, updateBackground } from "../kit/background";
 import { easeOutBack, fx } from "../kit/fx";
-import { GAME_W, H, mouse } from "../kit/input";
+import { GAME_W, H, W, mouse } from "../kit/input";
 import { setMood } from "../kit/ambience";
 import { play } from "../kit/sound";
 import {
@@ -14,6 +14,7 @@ import {
 } from "../kit/style";
 import * as session from "../session";
 import { Modal, RESULT_RIGHT, RESULT_WRONG } from "./modal";
+import { Tutorial, type Rect } from "./tutorial";
 import { CARD_H, CARD_W, Card, MenuButton } from "./widgets";
 
 const MARGIN = 48, GRID_TOP = 144, MENU_X = MARGIN, MENU_W = 240, GUTTER = 32, PER_ROW = 3;
@@ -28,7 +29,7 @@ interface Verdictish { text: string; name: string; color: typeof MOSS; t: number
 export class BoardScreen implements Screen {
   private cards: Card[] = [];
   private buttons: MenuButton[];
-  private briefing = new Modal("");
+  private tour = new Tutorial();
   private facts = new Modal("FACTS");
   private logs = new Modal("LOGS");
   private results = new Modal("");
@@ -48,7 +49,7 @@ export class BoardScreen implements Screen {
       () => {
         this.layout();
         this.loading = false;
-        if (!session.game!.accused && !this.seenBriefing) this.briefing.show(session.game!.briefing);
+        if (!session.game!.accused && !this.seenBriefing) this.startTour(false);
         this.seenBriefing = true;
       },
       (e) => (this.error = String(e)),
@@ -68,7 +69,38 @@ export class BoardScreen implements Screen {
   }
 
   private get modal() {
-    return [this.briefing, this.facts, this.logs, this.results].find((m) => m.open) ?? null;
+    return [this.facts, this.logs, this.results].find((m) => m.open) ?? null;
+  }
+
+  /** The case intro, then (first time, or on H) a spotlight tour of the board. */
+  private startTour(force: boolean) {
+    const g = session.game!;
+    const pad = (r: Rect, p = 12): Rect => ({ x: r.x - p, y: r.y - p, w: r.w + 2 * p, h: r.h + 2 * p });
+    const button = (label: string) => () => {
+      const b = this.buttons.find((x) => x.label === label)!;
+      return pad({ x: b.x, y: b.y, w: b.w, h: b.h }, 8);
+    };
+    const cards = () => {
+      const xs = this.cards.map((c) => c.x), ys = this.cards.map((c) => c.y);
+      const x = Math.min(...xs), y = Math.min(...ys);
+      return pad({ x, y, w: Math.max(...xs) + CARD_W - x, h: Math.max(...ys) + CARD_H - y }, 16);
+    };
+    const time = g.time_of_death.split("(")[0].trim().toLowerCase();
+    this.tour.begin(
+      {
+        title: "A MURDER AT BLY MANOR",
+        body: `${g.victim} was found dead in ${g.crime_location.toLowerCase()}, ${time}. Six people were in the house that night. One of the five still breathing did it.\n\nYour job: question them, catch the lies, and name the killer.`,
+      },
+      [
+        { title: "THE SUSPECTS", body: "Click anyone to question them in their room. Ask whatever you want, in your own words. They answer as themselves, and every one of them is hiding something.", target: cards },
+        { title: "WHO TALKS TO WHO", body: "When you leave a room, they gossip. Watch the light run down the string from whoever's talking to whoever's listening. What they hear changes how they treat you.", target: () => ({ x: GAME_W + 8, y: 8, w: W - GAME_W - 16, h: H - 16 }) },
+        { title: "FACTS", body: "What's known about the case: the victim, where and when, and the clues found so far.", target: button("FACTS") },
+        { title: "LOGS", body: "Your notes on every interview, written up as you go.", target: button("LOGS") },
+        { title: "ACCUSE", body: "When you're sure, accuse. You only get one shot, so make it count.", target: button("ACCUSE") },
+        { title: "IN THE ROOM", body: "Watch their face and the Nerves, Temper and Trust meters. Push too hard and they crack, be decent and they open up. TAB shows your notes, ESC leaves the room, H brings this tour back." },
+      ],
+      force,
+    );
   }
 
   enter() {
@@ -80,7 +112,8 @@ export class BoardScreen implements Screen {
   update() {
     this.frame++;
     updateBackground(GAME_W);
-    const free = !this.modal && !this.verdict;
+    this.tour.update();
+    const free = !this.modal && !this.verdict && !this.tour.active;
     for (const c of this.cards) {
       if (free) c.hover(mouse.x, mouse.y);
       else c.hovered = false;
@@ -100,6 +133,8 @@ export class BoardScreen implements Screen {
   }
 
   key(e: KeyboardEvent) {
+    if (this.tour.active) return this.tour.key(e);
+    if ((e.key === "h" || e.key === "H") && !this.loading && !this.modal && !this.verdict) return this.startTour(true);
     if (e.key !== "Escape") return;
     const m = this.modal;
     if (m) m.close();
@@ -111,6 +146,7 @@ export class BoardScreen implements Screen {
   }
 
   click(x: number, y: number) {
+    if (this.tour.active) return this.tour.next();
     if (this.verdict || this.loading) return;
     const m = this.modal;
     if (m) {
@@ -172,17 +208,19 @@ export class BoardScreen implements Screen {
       text(ctx, "Five suspects. One of them did it. Choose who to question.", CARDS_LEFT, MARGIN + 52, 18, MIST);
       text(ctx, "CASE FILE", MENU_X, GRID_TOP + 6, 14, AMBER);
       for (const b of this.buttons) b.draw(ctx);
+      const last = this.buttons[this.buttons.length - 1];
+      text(ctx, "H  how to play", MENU_X, last.y + last.h + 32, 14, MIST, { shadow: false });
       for (const c of this.cards) c.draw(ctx);
       if (this.accusing) this.drawBanner(ctx);
     }
 
-    this.briefing.draw(ctx);
     this.facts.draw(ctx);
     this.logs.draw(ctx);
     this.results.draw(ctx);
     if (this.verdict) this.drawVerdict(ctx);
     fx.overlay(ctx, GAME_W, H);
     this.sidePanel(ctx);
+    this.tour.draw(ctx);
   }
 
   private drawBanner(ctx: CanvasRenderingContext2D) {
