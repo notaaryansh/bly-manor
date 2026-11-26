@@ -21,7 +21,7 @@ def sse_events(text):
 
 @pytest.fixture
 def game():
-    r = client.post("/api/games", json={"test": True, "chaos": True})
+    r = client.post("/api/games", json={"test": True})
     assert r.status_code == 200
     return r.json()
 

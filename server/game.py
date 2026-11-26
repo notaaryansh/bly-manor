@@ -22,9 +22,8 @@ class GameError(Exception):
 
 
 class Game:
-    def __init__(self, gid, test=False, chaos=True):
+    def __init__(self, gid, test=False):
         self.id = gid
-        self.chaos = chaos
         self.created = time.time()
         self.lock = threading.Lock()
         self.events = []            # gossip events, read by the SSE stream
@@ -49,8 +48,9 @@ class Game:
         self.openings = {}
         self.snippets = {n: [] for n in living}
         self.last_exchange = {}
+        # suspects always talk to each other between interrogations
         self.comms = AgentCommunicationManager(self.agents, m.relationships, m.case_state,
-                                               on_gossip=self._on_gossip) if chaos else None
+                                               on_gossip=self._on_gossip)
 
     def _make_agent(self, name):
         m = self.master
@@ -76,7 +76,6 @@ class Game:
             suspects.append(view)
         return {
             "id": self.id,
-            "chaos": self.chaos,
             "victim": m.victim,
             "crime_location": m.crime_location,
             "cause_of_death": m.cause_of_death,
@@ -124,7 +123,7 @@ class Game:
         """The detective leaves a room: rumours start, and the log gets a new line."""
         self.suspect(name)
         threading.Thread(target=self._add_snippet, args=(name,), daemon=True).start()
-        if self.comms and name in self.last_exchange:
+        if name in self.last_exchange:
             question, reply = self.last_exchange.pop(name)
             self.comms.trigger_agent_communications(name, question, reply)
             return True

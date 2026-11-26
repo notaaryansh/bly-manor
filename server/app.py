@@ -37,7 +37,6 @@ games_lock = threading.Lock()
 
 class NewGame(BaseModel):
     test: bool = False
-    chaos: bool = True
 
 
 class Question(BaseModel):
@@ -75,7 +74,7 @@ def health():
 def new_game(body: NewGame):
     gid = uuid.uuid4().hex
     try:
-        game = Game(gid, test=body.test, chaos=body.chaos)
+        game = Game(gid, test=body.test)
     except GameError as e:
         raise HTTPException(502, str(e))
     with games_lock:
