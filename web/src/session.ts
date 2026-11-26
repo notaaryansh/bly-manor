@@ -3,15 +3,18 @@
 import { getGame, newGame, type GameState, type Moods } from "./api";
 
 const params = new URLSearchParams(location.search);
-/** ?test=1 plays the fixed practice case; ?calm=1 turns off chaos gossip. */
+/** ?test=1 plays the fixed practice case. */
 export const TEST = params.get("test") === "1";
-export const CHAOS = params.get("calm") !== "1";
 
 export let game: GameState | null = null;
+const dealt: ((g: GameState) => void)[] = [];
+/** Called whenever a new case is dealt. */
+export const onDeal = (fn: (g: GameState) => void) => dealt.push(fn);
 
 export async function deal() {
-  game = await newGame(TEST, CHAOS);
+  game = await newGame(TEST);
   transcripts.clear();
+  for (const fn of dealt) fn(game);
   return game;
 }
 
