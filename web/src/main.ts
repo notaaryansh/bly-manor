@@ -34,7 +34,7 @@ async function boot() {
     w.__blyAudio = ambienceState;
   }
   start(canvas);
-  show(new TitleScreen(() => show(board()), side));
+  show(new TitleScreen(() => show(board())));
 }
 
 void boot();
