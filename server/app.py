@@ -6,7 +6,6 @@ HTTP API for bly manor. Run from the repo root:
 BLY_MOCK_AI=1 swaps OpenAI for canned replies (no key needed).
 After `npm run build` in web/, this one process also serves the game itself.
 """
-import asyncio
 import json
 import os
 import threading
@@ -14,7 +13,7 @@ import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -125,30 +124,15 @@ def leave(gid: str, name: str):
     return {"gossip": guard(get_game(gid).leave, name)}
 
 
-@app.get("/api/games/{gid}/events")
-async def events(gid: str, request: Request, after: int = 0):
-    """Server-sent events: each gossip hop as it happens."""
+@app.get("/api/games/{gid}/gossip")
+def gossip(gid: str, after: int = 0):
+    """Gossip hops since the first `after`. The client polls this: a plain
+    request gets through any tunnel or proxy, where a never-ending stream
+    can be held back until it closes (cloudflared does)."""
     game = get_game(gid)
-    resume = request.headers.get("last-event-id", "")
-    if resume.isdigit():  # EventSource reconnected: carry on where it stopped
-        after = int(resume)
-
-    async def stream():
-        sent = after
-        idle = 0
-        while not await request.is_disconnected():
-            with game.lock:
-                fresh = game.events[sent:]
-            for event in fresh:
-                sent += 1
-                yield f"id: {sent}\n" + sse(event["type"], event)
-            idle = 0 if fresh else idle + 1
-            if idle and idle % 60 == 0:
-                yield ": keep-alive\n\n"
-            await asyncio.sleep(0.25)
-
-    return StreamingResponse(stream(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    with game.lock:
+        fresh = game.events[max(0, after):]
+    return {"events": fresh, "next": max(0, after) + len(fresh)}
 
 
 @app.get("/api/games/{gid}/logs")

@@ -97,13 +97,12 @@ def test_bad_ids(game):
     assert client.post(f"/api/games/{game['id']}/suspects/Nick/ask", json={"question": ""}).status_code == 422
 
 
-def test_events_resume_after_reconnect(game):
+def test_gossip_polls_from_where_it_left_off(game):
     gid = game["id"]
     g = games[gid]
     g._on_gossip("Nick", "Sarah", "one", "Close Friend", {"Anxious": 1, "Moody": 1, "Trust": 1})
     g._on_gossip("Nick", "David", "two", "Rival", {"Anxious": 1, "Moody": 1, "Trust": 1})
-    with client.stream("GET", f"/api/games/{gid}/events", headers={"Last-Event-ID": "1"}) as r:
-        for line in r.iter_lines():
-            if line.startswith("data:"):
-                assert json.loads(line[5:])["text"] == "two"
-                break
+    first = client.get(f"/api/games/{gid}/gossip").json()
+    assert [e["text"] for e in first["events"]] == ["one", "two"] and first["next"] == 2
+    assert client.get(f"/api/games/{gid}/gossip", params={"after": 1}).json()["events"][0]["text"] == "two"
+    assert client.get(f"/api/games/{gid}/gossip", params={"after": 2}).json() == {"events": [], "next": 2}
