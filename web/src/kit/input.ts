@@ -2,6 +2,8 @@
 // Typing goes through a hidden <input> so phones/TVs get a real keyboard and
 // paste, IME and backspace-repeat all work for free.
 
+import { isMuted, toggleMute } from "./ambience";
+import { fx } from "./fx";
 import { unlock } from "./sound";
 
 export const W = 1800;
@@ -48,6 +50,11 @@ export function initInput(canvas: HTMLCanvasElement, input: HTMLInputElement) {
   window.addEventListener("keydown", (e) => {
     unlock();
     if (e.key === "Tab") e.preventDefault();
+    if ((e.key === "m" || e.key === "M") && !isTyping()) {
+      toggleMute();
+      fx.toast(isMuted() ? "Sound off. M to turn it back on." : "Sound on.");
+      return;
+    }
     target?.key?.(e);
   });
 }
