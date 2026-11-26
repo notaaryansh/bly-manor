@@ -1,14 +1,8 @@
 # Paid / non-redistributable art packs: keep local only (the game runs without them)
-/assets/oak_woods_v1.0/
-/assets/potrait/
+/web/public/assets/oak_woods_v1.0/
+/web/public/assets/potrait/
 .DS_Store
-/__pycache__
 .env
-/src/__pycache__
-/src/agents/__pycache__
-/src/gui/__pycache__
-/src/utils/__pycache__
-/src/visualization/__pycache__
 /.venv
 __pycache__/
 .pytest_cache/
