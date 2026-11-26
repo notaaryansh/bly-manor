@@ -18,6 +18,7 @@ const MUTE_KEY = "bly-muted";
 let ac: AudioContext | null = null;
 let master: GainNode, rainGain: GainNode, musicGain: GainNode, echo: DelayNode, rainFilter: BiquadFilterNode;
 let mood: Mood = "storm";
+let analyser: AnalyserNode | null = null;
 let nextChord = 0;
 let chordIndex = 0;
 let muted = false;
@@ -34,35 +35,27 @@ export function startAmbience(ctx: AudioContext) {
   master = ac.createGain();
   master.gain.value = muted ? 0 : 1;
   master.connect(ac.destination);
-
-  // rain: 1s of brown-ish noise at 22 kHz, looped, band-limited, gently breathing
-  const rate = 22050;
-  const buf = ac.createBuffer(1, rate, rate);
-  const d = buf.getChannelData(0);
-  let last = 0;
-  for (let i = 0; i < rate; i++) {
-    last = (last + 0.06 * (Math.random() * 2 - 1)) * 0.97;
-    d[i] = last * 3 + (Math.random() * 2 - 1) * 0.15;
+  if (import.meta.env.DEV) {
+    analyser = ac.createAnalyser();
+    analyser.fftSize = 2048;
+    master.connect(analyser);
   }
+
+  // rain: a soft bright hiss plus thousands of tiny droplet ticks, 2s of stereo
+  // at 22 kHz (~350 KB) looped, with the rumble cut out
   const noise = ac.createBufferSource();
-  noise.buffer = buf;
+  noise.buffer = rainBuffer(ac);
   noise.loop = true;
-  rainFilter = ac.createBiquadFilter();
-  rainFilter.type = "lowpass";
-  rainFilter.frequency.value = 1400;
   const high = ac.createBiquadFilter();
   high.type = "highpass";
-  high.frequency.value = 250;
-  const lfo = ac.createOscillator();
-  lfo.frequency.value = 0.07;
-  const lfoDepth = ac.createGain();
-  lfoDepth.gain.value = 300;
-  lfo.connect(lfoDepth).connect(rainFilter.frequency);
+  high.frequency.value = 500;
+  rainFilter = ac.createBiquadFilter();
+  rainFilter.type = "lowpass";
+  rainFilter.frequency.value = 7000;
   rainGain = ac.createGain();
   rainGain.gain.value = 0;
   noise.connect(high).connect(rainFilter).connect(rainGain).connect(master);
   noise.start();
-  lfo.start();
 
   // music bus with one shared echo
   musicGain = ac.createGain();
@@ -87,11 +80,42 @@ export function setMood(m: Mood) {
   mood = m;
   if (!ac) return;
   const t = ac.currentTime;
-  const rain = m === "storm" ? 0.16 : m === "calm" ? 0.09 : 0.05; // indoors you hear it through the window
+  const rain = m === "storm" ? 0.55 : m === "calm" ? 0.32 : 0.42;
   const music = m === "tense" ? 0.13 : 0.11;
   rainGain.gain.setTargetAtTime(rain, t, 1.2);
   musicGain.gain.setTargetAtTime(music, t, 1.5);
-  rainFilter.frequency.setTargetAtTime(m === "tense" ? 900 : 1400, t, 1);
+  // indoors the rain is on the other side of the window: duller, not quieter
+  rainFilter.frequency.setTargetAtTime(m === "tense" ? 1600 : m === "calm" ? 5000 : 7000, t, 1);
+}
+
+/**
+ * Rain = a soft hiss plus many tiny droplet ticks of random size, and a few
+ * brighter plinks. Left and right are different so it surrounds you.
+ */
+function rainBuffer(ctx: AudioContext) {
+  const rate = 22050, seconds = 2, n = rate * seconds;
+  const buf = ctx.createBuffer(2, n, rate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < n; i++) {
+      const swell = 0.85 + 0.15 * Math.sin((2 * Math.PI * i) / n); // one slow swell per loop, seamless
+      d[i] = (Math.random() * 2 - 1) * 0.1 * swell;
+    }
+    // droplets: ~500 a second, mostly tiny, decaying noise ticks of 2-10 ms
+    const drops = 500 * seconds;
+    for (let k = 0; k < drops; k++) {
+      const at = (Math.random() * n) | 0;
+      const amp = 0.05 + 0.45 * Math.random() ** 3;
+      const len = (rate * (0.002 + 0.008 * Math.random())) | 0;
+      for (let j = 0; j < len; j++) d[(at + j) % n] += (Math.random() * 2 - 1) * amp * Math.exp((-5 * j) / len);
+    }
+    // a few plinks off the gutters: short bright pitched drops
+    for (let k = 0; k < 6 * seconds; k++) {
+      const at = (Math.random() * n) | 0, f = 1500 + Math.random() * 2500, len = (rate * 0.03) | 0;
+      for (let j = 0; j < len; j++) d[(at + j) % n] += Math.sin((2 * Math.PI * f * j) / rate) * 0.12 * Math.exp((-6 * j) / len);
+    }
+  }
+  return buf;
 }
 
 export function toggleMute() {
@@ -182,4 +206,21 @@ export const ambienceState = () => ({
   rain: ac ? +rainGain.gain.value.toFixed(3) : 0,
   music: ac ? +musicGain.gain.value.toFixed(3) : 0,
   chords: chordIndex,
+  bands: bands(),
 });
+
+/** Dev: share of output energy per frequency band, to check the rain sounds like rain. */
+function bands() {
+  if (!analyser || !ac) return null;
+  const db = new Float32Array(analyser.frequencyBinCount);
+  analyser.getFloatFrequencyData(db);
+  const hz = ac.sampleRate / 2 / db.length;
+  const edges = [0, 300, 1000, 3000, 7000, 11000];
+  const e = edges.slice(1).map(() => 0);
+  db.forEach((v, i) => {
+    const f = i * hz, k = edges.findIndex((x, j) => f >= x && f < (edges[j + 1] ?? Infinity));
+    if (k >= 0 && k < e.length) e[k] += 10 ** (v / 10);
+  });
+  const total = e.reduce((a, b) => a + b, 0) || 1;
+  return Object.fromEntries(e.map((v, i) => [`${edges[i]}-${edges[i + 1]}Hz`, +(v / total).toFixed(2)]));
+}
