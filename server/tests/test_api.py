@@ -95,3 +95,15 @@ def test_bad_ids(game):
     assert client.get("/api/games/nope").status_code == 404
     assert client.post(f"/api/games/{game['id']}/suspects/Nobody/opening").status_code == 400
     assert client.post(f"/api/games/{game['id']}/suspects/Nick/ask", json={"question": ""}).status_code == 422
+
+
+def test_events_resume_after_reconnect(game):
+    gid = game["id"]
+    g = games[gid]
+    g._on_gossip("Nick", "Sarah", "one", "Close Friend", {"Anxious": 1, "Moody": 1, "Trust": 1})
+    g._on_gossip("Nick", "David", "two", "Rival", {"Anxious": 1, "Moody": 1, "Trust": 1})
+    with client.stream("GET", f"/api/games/{gid}/events", headers={"Last-Event-ID": "1"}) as r:
+        for line in r.iter_lines():
+            if line.startswith("data:"):
+                assert json.loads(line[5:])["text"] == "two"
+                break

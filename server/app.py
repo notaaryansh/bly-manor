@@ -127,6 +127,9 @@ def leave(gid: str, name: str):
 async def events(gid: str, request: Request, after: int = 0):
     """Server-sent events: each gossip hop as it happens."""
     game = get_game(gid)
+    resume = request.headers.get("last-event-id", "")
+    if resume.isdigit():  # EventSource reconnected: carry on where it stopped
+        after = int(resume)
 
     async def stream():
         sent = after
