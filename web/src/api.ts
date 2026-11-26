@@ -97,9 +97,29 @@ export async function ask(id: string, name: string, question: string, onToken: (
   throw new Error("ask: stream ended early");
 }
 
-/** Gossip hops as they happen. Returns a function that stops listening. */
+const GOSSIP_POLL_MS = 1500;
+
+/**
+ * Gossip hops as they happen. Polls rather than streams: a plain request gets
+ * through any tunnel or proxy, where a never-ending stream can be held back
+ * until it closes. Returns a function that stops listening.
+ */
 export function onGossip(id: string, handler: (g: Gossip) => void): () => void {
-  const es = new EventSource(`/api/games/${id}/events`);
-  es.addEventListener("gossip", (e) => handler(JSON.parse((e as MessageEvent).data)));
-  return () => es.close();
+  let after = 0, timer = 0, stopped = false;
+  const poll = async () => {
+    try {
+      const r = await call<{ events: Gossip[]; next: number }>("GET", `/games/${id}/gossip?after=${after}`);
+      if (stopped) return;
+      after = r.next;
+      r.events.forEach(handler);
+    } catch {
+      /* offline for a moment: try again next round */
+    }
+    if (!stopped) timer = window.setTimeout(poll, GOSSIP_POLL_MS);
+  };
+  poll();
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+  };
 }
