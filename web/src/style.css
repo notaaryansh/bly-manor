@@ -1,0 +1,25 @@
+html, body {
+  margin: 0;
+  height: 100%;
+  background: #120e1a;
+  overflow: hidden;
+}
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+#game {
+  /* drawn at 1800x900, scaled to fit the window without blurring the pixels */
+  image-rendering: pixelated;
+  width: min(100vw, 200vh);
+  height: min(50vw, 100vh);
+  cursor: default;
+}
+#ask {
+  /* invisible: it only collects typing so the canvas can draw it */
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  opacity: 0;
+}
