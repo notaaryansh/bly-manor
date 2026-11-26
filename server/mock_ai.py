@@ -10,7 +10,7 @@ import random
 import time
 from types import SimpleNamespace as NS
 
-CASE_PATH = os.path.join(os.path.dirname(__file__), "..", "src", "test_case.json")
+CASE_PATH = os.path.join(os.path.dirname(__file__), "test_case.json")
 
 REPLIES = itertools.cycle([
     "I was in the library all evening. Reading. Ask anyone.",

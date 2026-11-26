@@ -9,11 +9,11 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
-from src.agents import AgentCommunicationManager, AgentOrchestrator, MurderMysteryMaster, SuspectAgent
+from .agents import AgentCommunicationManager, AgentOrchestrator, MurderMysteryMaster, SuspectAgent
 
 from . import content
 
-TEST_CASE = os.path.join(os.path.dirname(__file__), "..", "src", "test_case.json")
+TEST_CASE = os.path.join(os.path.dirname(__file__), "test_case.json")
 PUBLIC_SUSPECT_FIELDS = ("name", "age", "gender", "occupation", "personality_traits", "is_victim")
 
 

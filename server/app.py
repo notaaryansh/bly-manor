@@ -4,19 +4,22 @@ HTTP API for bly manor. Run from the repo root:
     uvicorn server.app:app --reload
 
 BLY_MOCK_AI=1 swaps OpenAI for canned replies (no key needed).
+After `npm run build` in web/, this one process also serves the game itself.
 """
 import asyncio
 import json
 import os
 import threading
 import uuid
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from src.agents import llm
+from .agents import llm
 
 from .game import Game, GameError
 
@@ -156,3 +159,9 @@ def logs(gid: str):
 @app.post("/api/games/{gid}/accuse")
 def accuse(gid: str, body: Accusation):
     return guard(get_game(gid).accuse, body.name)
+
+
+# the built web client, if there is one: one process serves the whole game
+WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
+if WEB_DIST.is_dir():
+    app.mount("/", StaticFiles(directory=WEB_DIST, html=True), name="web")
