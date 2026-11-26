@@ -1,0 +1,3 @@
+rain.mp3: "Rain (loopable)" by Ylmir, CC0 (public domain)
+https://opengameart.org/content/rain-loopable
+Trimmed to a 12s mono loop with a crossfaded seam.
