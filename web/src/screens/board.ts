@@ -7,6 +7,7 @@ import type { Screen } from "../app";
 import { drawBackground, updateBackground } from "../kit/background";
 import { easeOutBack, fx } from "../kit/fx";
 import { GAME_W, H, mouse } from "../kit/input";
+import { setMood } from "../kit/ambience";
 import { play } from "../kit/sound";
 import {
   AMBER, BLOOD, INK, MIST, MOSS, PARCHMENT, rgb, text, vignette,
@@ -71,6 +72,7 @@ export class BoardScreen implements Screen {
   }
 
   enter() {
+    setMood("calm");
     fx.showToasts = true;
     if (session.game) this.layout();
   }
