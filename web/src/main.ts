@@ -1,4 +1,5 @@
 import { show, start, tick } from "./app";
+import { ambienceState } from "./kit/ambience";
 import { BACKGROUND_IMAGES } from "./kit/background";
 import { initInput } from "./kit/input";
 import { BUTTONS, FRAME_A, FRAME_B, FRAME_D, PLATE_A, PLATE_B, PORTRAITS, loadFonts, loadImages } from "./kit/style";
@@ -27,7 +28,11 @@ async function boot() {
   ]);
   session.onDeal((g) => suspectBoard.load(g));
   tick(() => suspectBoard.update());
-  if (import.meta.env.DEV) (window as unknown as { __blySuspects: typeof suspectBoard }).__blySuspects = suspectBoard;
+  if (import.meta.env.DEV) {
+    const w = window as unknown as Record<string, unknown>;
+    w.__blySuspects = suspectBoard;
+    w.__blyAudio = ambienceState;
+  }
   start(canvas);
   show(new TitleScreen(() => show(board()), side));
 }
