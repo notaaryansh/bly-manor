@@ -71,7 +71,7 @@ the game itself is plain typescript + canvas, no framework, and its tiny (like 2
   <img src="docs/screenshots/verdict.png" width="49%" alt="the verdict">
 </p>
 
-## art and stuff
+## Credits
 
 ui art is tiny rpg dragon regalia gui by gabriel "tiopalada" lima and gui interface kit by jamie cross (both cc0). fonts are [raster forge](https://www.fontspace.com/raster-forge-font-f135159) and [geist pixel](https://github.com/vercel/geist-font). the rain is a real recording, [rain (loopable)](https://opengameart.org/content/rain-loopable) by ylmir (cc0). the music, thunder, sound effects and the rooms are just made in code
 
